@@ -214,6 +214,7 @@ async function home(root){
       <nav class="sub">
         <button data-sub="positions" class="active">Позиции</button>
         <button data-sub="log">Выработка</button>
+        <button data-sub="stats">Статистика</button>
       </nav>
       <div id="workRoot"></div>`;
     const sub=root.querySelector('.sub'), wr=root.querySelector('#workRoot');
@@ -224,6 +225,70 @@ async function home(root){
       e.target.dataset.sub==='positions'?positions(wr):log(wr);
     });
     positions(wr);
+     /* ==== Статистика ==== */
+  async function stats(root){
+    root.innerHTML=`
+      <section>
+        <h2>Статистика за месяц</h2>
+        <label>Месяц
+          <select id="monthSel">
+            ${Array.from({length:12},(_,m)=>`<option value="${m}">${new Date(0,m).toLocaleString('ru',{month:'long'})}</option>`).join('')}
+          </select>
+        </label>
+        <label>Год
+          <select id="yearSel">
+            ${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
+          </select>
+        </label>
+        <ul id="statsList"></ul>
+      </section>`;
+
+    const monthSel=root.querySelector('#monthSel');
+    const yearSel=root.querySelector('#yearSel');
+    const list=root.querySelector('#statsList');
+
+    [monthSel,yearSel].forEach(sel=>sel.addEventListener('change',refresh));
+    refresh();
+
+    async function refresh(){
+      const month=+monthSel.value;
+      const year=+yearSel.value;
+      const logs=await getAll('worklog');
+      const positions=await getAll('positions');
+
+      /* фильтр по месяцу и году */
+      const filtered=logs.filter(l=>{
+        const d=new Date(l.date);
+        return d.getMonth()===month && d.getFullYear()===year;
+      });
+
+      /* группируем по наименованию */
+      const map=new Map();
+      filtered.forEach(l=>{
+        const name=positions.find(p=>p.id===l.posId)?.name || '—';
+        const cur=map.get(name)||{count:0,sets:0};
+        cur.count+=1;
+        cur.sets+=l.sets;
+        map.set(name,cur);
+      });
+
+      /* выводим */
+      list.innerHTML=[...map.entries()]
+        .map(([name,{count,sets}])=>`<li>${name} – ${count} раз(а) – ${sets} компл.</li>`)
+        .join('');
+    }
+  }
+
+  /* ==== переключение под-вкладок ==== */
+  sub.addEventListener('click',e=>{
+    if(!e.target.dataset.sub) return;
+    [...sub.children].forEach(b=>b.classList.remove('active'));
+    e.target.classList.add('active');
+    const fn={positions,log,stats}[e.target.dataset.sub];
+    fn(wr);
+  });
+  positions(wr);   // стартовая
+}
   }
 };
 
@@ -314,4 +379,5 @@ render('home');
 </script>
 </body>
 </html>
+
 
