@@ -67,6 +67,13 @@ nav.addEventListener('click',e=>{
   if(e.target.tagName!=='BUTTON') return;
   [...nav.children].forEach(b=>b.classList.remove('active'));
   e.target.classList.add('active');
+ const tabs = {
+  home,
+  expenses,
+  incomes,
+  work
+};
+ function render(tab){tabs[tab](document.getElementById('content'));}
   render(e.target.dataset.tab);
 });
 const sum=a=>a.reduce((s,x)=>s+x.amount,0);
@@ -388,12 +395,6 @@ window.editWorklog=async id=>{
   const pos=positions.find(p=>p.id===logItem.posId);
   const newSets=prompt('Комплектов',logItem.sets); if(newSets===null) return;
   const newDate=prompt('Дата (YYYY-MM-DD)',logItem.date); if(newDate===null) return;
- const tabs = {
-  home,        // уже есть
-  expenses,    // добавьте
-  incomes,     // добавьте
-  work         // добавьте
-};
   await put('worklog',{...logItem,sets:+newSets,date:newDate,earned:+newSets*pos.price});
   render('work');
 };
@@ -405,6 +406,7 @@ render('home');
 </body>
 
 </html>
+
 
 
 
