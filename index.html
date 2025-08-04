@@ -152,29 +152,95 @@ async function positions(root){
   refresh();
 }
 
+/* ---------- выработка ---------- */
 async function log(root){
-  const y=new Date().getFullYear();
+  const positions=await getAll('positions');
   root.innerHTML=`
-    <section><h2>Заработок ${y}</h2><canvas id="bar"></canvas><p>Год: ${y}</p></section>
+    <section>
+      <h2>Заработок ${new Date().getFullYear()}</h2>
+      <canvas id="bar"></canvas>
+    </section>
     <section>
       <h2>Добавить выработку</h2>
-      <input type="date" id="date"/>
-      <div id="addForm" style="display:none">
-        <select id="pos"></select>
-        <input id="sets" type="number" placeholder="Комплектов" min="1"/>
-        <button id="save">Сохранить</button>
+      <input type="date" id="date" required>
+      <div id="addForm" style="display:none; display:flex; flex-direction:column; gap:8px;">
+        <select id="posSelect">${positions.map(p=>`<option value="${p.id}">${p.name}</option>`)}</select>
+        <input id="setsInput" type="number" min="0.01" step="0.01" placeholder="Комплектов">
+        <input id="priceInput" type="number" min="0.01" step="0.01" placeholder="Цена за 1 отверстие (₽)">
+        <button id="saveBtn">Сохранить</button>
       </div>
       <ul id="dayList"></ul>
       <p id="dayTotal"></p>
     </section>`;
-  const positions=await getAll('positions');
-  const posSel=root.querySelector('#pos'); posSel.innerHTML=positions.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  const dateSel=root.querySelector('#date'), formDiv=root.querySelector('#addForm'), setsInp=root.querySelector('#sets'), saveBtn=root.querySelector('#save'), dayList=root.querySelector('#dayList'), dayTotal=root.querySelector('#dayTotal');
-  dateSel.addEventListener('change',loadDay);
-  saveBtn.addEventListener('click',async()=>{const posId=+posSel.value, sets=+setsInp.value, pos=positions.find(p=>p.id===posId);await add('worklog',{posId,sets,date:dateSel.value,earned:sets*pos.price});loadDay();refreshBar();});
-  async function loadDay(){const d=dateSel.value;const logs=await getAll('worklog');const filtered=logs.filter(l=>l.date===d);dayList.innerHTML=filtered.map(l=>{const p=positions.find(p=>p.id===l.posId);return`<li>${p.name} | ${p.holes*l.sets} отв | ${l.sets} компл | ${l.earned}₽ (${l.date})<span class="actions"><button onclick="editWorklog(${l.id})">✏</button><button onclick="remove('worklog',${l.id})">✖</button></span></li>`;}).join('');const total=filtered.reduce((a,b)=>a+b.earned,0),totalSets=filtered.reduce((a,b)=>a+b.sets,0),totalHoles=filtered.reduce((a,b)=>{const p=positions.find(p=>p.id===b.posId);return a+p.holes*b.sets;},0);dayTotal.textContent=`Итого: ${totalHoles} отв, ${totalSets} компл, ${total}₽`;formDiv.style.display='block';}
-  async function refreshBar(){const logs=await getAll('worklog');const byMonth=Array(12).fill(0);logs.forEach(l=>{const m=new Date(l.date).getMonth();byMonth[m]+=l.earned});bar(root.querySelector('#bar'),['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'],byMonth);}
-  loadDay(); refreshBar();
+
+  const dateSel=root.querySelector('#date');
+  const formDiv=root.querySelector('#addForm');
+  const posSel=root.querySelector('#posSelect');
+  const setsInp=root.querySelector('#setsInput');
+  const priceInp=root.querySelector('#priceInput');
+  const saveBtn=root.querySelector('#saveBtn');
+  const dayList=root.querySelector('#dayList');
+  const dayTotal=root.querySelector('#dayTotal');
+
+  dateSel.addEventListener('change', loadDay);
+  saveBtn.addEventListener('click', async ()=>{
+    const posId = +posSel.value;
+    const sets  = parseFloat(setsInp.value.replace(',', '.'));
+    const price = parseFloat(priceInp.value.replace(',', '.'));
+    if(isNaN(sets) || isNaN(price) || sets<=0 || price<=0){ alert('Введите корректные числа'); return; }
+
+    const pos = positions.find(p=>p.id===posId);
+    const holesTotal = pos.holes * sets;
+    const earned     = (holesTotal * price).toFixed(2);
+
+    await add('worklog', {
+      posId,
+      sets,
+      price,          // цена за 1 отверстие
+      date: dateSel.value,
+      earned: +earned
+    });
+    loadDay();
+    refreshBar();
+  });
+
+  async function loadDay(){
+    const d = dateSel.value;
+    const logs = await getAll('worklog');
+    const filtered = logs.filter(l=>l.date===d);
+    dayList.innerHTML = filtered.map(l=>{
+      const p = positions.find(p=>p.id===l.posId);
+      return `<li>
+        ${p.name} | ${p.holes*l.sets} отв | ${l.sets} компл | 
+        ${l.price}₽/отв | ${l.earned}₽ итого
+        <span class="actions">
+          <button onclick="editWorklog(${l.id})">✏</button>
+          <button onclick="remove('worklog',${l.id})">✖</button>
+        </span>
+      </li>`;
+    }).join('');
+
+    const totalEarned = filtered.reduce((a,b)=>a+b.earned,0).toFixed(2);
+    const totalSets   = filtered.reduce((a,b)=>a+b.sets,0);
+    const totalHoles  = filtered.reduce((a,b)=>{
+      const p = positions.find(p=>p.id===b.posId);
+      return a + p.holes*b.sets;
+    },0);
+    dayTotal.textContent = `Итого: ${totalHoles} отв, ${totalSets} компл, ${totalEarned}₽`;
+    formDiv.style.display='block';
+  }
+
+  /* ---------- график за год ---------- */
+  async function refreshBar(){
+    const logs = await getAll('worklog');
+    const byMonth = Array(12).fill(0);
+    logs.forEach(l=>{
+      const m = new Date(l.date).getMonth();
+      byMonth[m] += l.earned;
+    });
+    bar(root.querySelector('#bar'), ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'], byMonth);
+  }
+  refreshBar();
 }
 
 /* ======== Редактирование / удаление ======== */
@@ -233,4 +299,5 @@ function render(tab){tabs[tab](document.getElementById('content'));}
 render('home');
 </script>
 </body>
+
 </html>
