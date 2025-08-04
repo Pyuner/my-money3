@@ -71,16 +71,91 @@ nav.addEventListener('click',e=>{
 });
 const sum=a=>a.reduce((s,x)=>s+x.amount,0);
 
-/* ============ Рендер вкладок ============ */
-const tabs={
-  async home(r){
-    const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
-    r.innerHTML=`
-      <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
-      <section><h2>Доходы</h2><ul>${inc.map(i=>`<li>${i.amount}₽ – ${i.source} (${i.date})<span class="actions"><button onclick="editIncome(${i.id})">✏</button><button onclick="remove('incomes',${i.id})">✖</button></span></li>`).join('')}</ul></section>
-      <section><h2>Расходы</h2><ul>${exp.map(e=>`<li>${e.amount}₽ – ${e.target} (${e.category}, ${e.date})<span class="actions"><button onclick="editExpense(${e.id})">✏</button><button onclick="remove('expenses',${e.id})">✖</button></span></li>`).join('')}</ul></section>`;
-    pie(document.getElementById('pie'),['Доходы','Расходы'],[sum(inc),sum(exp)]);
-  },
+/* ============== Главная ============== */
+async function home(root){
+  root.innerHTML=`
+    <!-- уже было -->
+    <section>
+      <h2>Доходы / Расходы</h2>
+      <canvas id="pie"></canvas>
+    </section>
+    <section>
+      <h2>Доходы</h2>
+      <ul id="incList"></ul>
+    </section>
+    <section>
+      <h2>Расходы</h2>
+      <ul id="expList"></ul>
+    </section>
+
+    <!-- новые диаграммы -->
+    <section>
+      <h2>Выберите год для подробных диаграмм</h2>
+      <select id="yearSelect">
+        ${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
+      </select>
+    </section>
+    <section>
+      <h2>Доходы по месяцам (убывание)</h2>
+      <canvas id="incChart"></canvas>
+    </section>
+    <section>
+      <h2>Расходы по месяцам (убывание)</h2>
+      <canvas id="expChart"></canvas>
+    </section>
+    <section>
+      <h2>Зарплата по месяцам (убывание)</h2>
+      <canvas id="salChart"></canvas>
+    </section>
+  `;
+
+  /* ---------- старый код списков ---------- */
+  const [inc, exp] = await Promise.all([getAll('incomes'), getAll('expenses')]);
+  const sum = arr => arr.reduce((a, b) => a + b.amount, 0);
+  const totalInc = sum(inc);
+  const totalExp = sum(exp);
+
+  root.querySelector('#incList').innerHTML = inc.map(i=>`<li>${i.amount}₽ – ${i.source} (${i.date})<span class="actions"><button onclick="editIncome(${i.id})">✏</button><button onclick="remove('incomes',${i.id})">✖</button></span></li>`).join('');
+  root.querySelector('#expList').innerHTML = exp.map(e=>`<li>${e.amount}₽ – ${e.target} (${e.category}, ${e.date})<span class="actions"><button onclick="editExpense(${e.id})">✏</button><button onclick="remove('expenses',${e.id})">✖</button></span></li>`).join('');
+  pie(document.getElementById('pie'), ['Доходы','Расходы'], [totalInc, totalExp]);
+
+  /* ---------- новые диаграммы ---------- */
+  const yearSel = root.querySelector('#yearSelect');
+  yearSel.addEventListener('change', drawCharts);
+  drawCharts();
+
+  async function drawCharts(){
+    const year = yearSel.value;
+    const [incSnap, expSnap] = await Promise.all([getAll('incomes'), getAll('expenses')]);
+
+    const incByMonth = Array(12).fill(0);
+    const expByMonth = Array(12).fill(0);
+    const salByMonth = Array(12).fill(0);
+
+    incSnap.forEach(r=>{
+      const d = new Date(r.date);
+      if(d.getFullYear() === +year){
+        incByMonth[d.getMonth()] += r.amount;
+        if(r.category === 'Зарплата') salByMonth[d.getMonth()] += r.amount;
+      }
+    });
+    expSnap.forEach(r=>{
+      const d = new Date(r.date);
+      if(d.getFullYear() === +year) expByMonth[d.getMonth()] += r.amount;
+    });
+
+    const months = Array.from({length:12},(_,i)=>new Date(0,i).toLocaleString('ru',{month:'short'}));
+
+    /* сортируем по убыванию суммы, но сохраняем месяц */
+    const sortedInc = months.map((m,i)=>({label:m, val:incByMonth[i]})).sort((a,b)=>b.val-a.val);
+    const sortedExp = months.map((m,i)=>({label:m, val:expByMonth[i]})).sort((a,b)=>b.val-a.val);
+    const sortedSal = months.map((m,i)=>({label:m, val:salByMonth[i]})).sort((a,b)=>b.val-a.val);
+
+    bar(root.querySelector('#incChart'), sortedInc.map(x=>x.label), sortedInc.map(x=>x.val));
+    bar(root.querySelector('#expChart'), sortedExp.map(x=>x.label), sortedExp.map(x=>x.val));
+    bar(root.querySelector('#salChart'), sortedSal.map(x=>x.label), sortedSal.map(x=>x.val));
+  }
+}
 
   async expenses(root){
     root.innerHTML=`
@@ -324,4 +399,5 @@ render('home');
 </body>
 
 </html>
+
 
