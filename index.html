@@ -18,10 +18,7 @@ input,select,button{padding:8px 10px;border:1px solid var(--border);border-radiu
 button[type=submit]{background:var(--accent);color:#fff;cursor:pointer}
 ul{list-style:none}li{padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 canvas{width:100%!important;height:300px!important}
-.inline-form input{margin-right:6px}
 .actions button{margin-left:4px;background:none;border:1px solid var(--border);cursor:pointer;font-size:.8rem;padding:2px 6px;border-radius:3px}
-.actions .save{background:#28a745;color:#fff;border-color:#28a745}
-.actions .cancel{background:#6c757d;color:#fff;border-color:#6c757d}
 </style>
 </head>
 <body>
@@ -36,170 +33,139 @@ canvas{width:100%!important;height:300px!important}
 <main id="content"></main>
 
 <script type="module">
-/* ============= IndexedDB ============= */
+/* ===== IndexedDB ===== */
 const DB_NAME='finance', DB_VER=2;
 async function openDB(){
-  return new Promise((resolve,reject)=>{
-    const req=indexedDB.open(DB_NAME,DB_VER);
-    req.onerror=()=>reject(req.error);
-    req.onsuccess=()=>resolve(req.result);
-    req.onupgradeneeded=()=>{
-      const db=req.result;
-      ['expenses','incomes','positions','worklog'].forEach(x=>{
-        if(!db.objectStoreNames.contains(x)) db.createObjectStore(x,{keyPath:'id',autoIncrement:true});
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(DB_NAME,DB_VER);
+    r.onerror=()=>rej(r.error);
+    r.onsuccess=()=>res(r.result);
+    r.onupgradeneeded=()=>{
+      const db=r.result;
+      ['expenses','incomes','positions','worklog'].forEach(s=>{
+        if(!db.objectStoreNames.contains(s)) db.createObjectStore(s,{keyPath:'id',autoIncrement:true});
       });
     };
   });
 }
-async function add(store,obj){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite'),q=tx.objectStore(store).add(obj);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
-async function put(store,obj){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite'),q=tx.objectStore(store).put(obj);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
-async function getAll(store){const db=await openDB();return new Promise((res,rej)=>{const q=db.transaction(store,'readonly').objectStore(store).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
-async function del(store,id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite'),q=tx.objectStore(store).delete(id);q.onsuccess=res;q.onerror=rej;});}
+async function add(s,o){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).add(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+async function put(s,o){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).put(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+async function getAll(s){const db=await openDB();return new Promise((res,rej)=>{const q=db.transaction(s,'readonly').objectStore(s).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+async function del(s,id){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).delete(id);q.onsuccess=res;q.onerror=()=>rej(q.error);});}
 
-/* ============= Chart.js ============= */
+/* ===== Chart.js ===== */
 import Chart from 'https://cdn.jsdelivr.net/npm/chart.js@4/auto/+esm';
-function pie(ctx,labels,data){new Chart(ctx,{type:'pie',data:{labels,datasets:[{data,backgroundColor:['#28a745','#dc3545']}]},options:{responsive:true,maintainAspectRatio:false}});}
-function bar(ctx,labels,data){new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'₽',data,backgroundColor:'#007bff'}]},options:{responsive:true,maintainAspectRatio:false}});}
+function pie(ctx,lbl,data){new Chart(ctx,{type:'pie',data:{labels:lbl,datasets:[{data,backgroundColor:['#28a745','#dc3545']}]},options:{responsive:true,maintainAspectRatio:false}});}
+function bar(ctx,lbl,data){new Chart(ctx,{type:'bar',data:{labels:lbl,datasets:[{label:'₽',data,backgroundColor:'#007bff'}]},options:{responsive:true,maintainAspectRatio:false}});}
 
-/* ============= Роутер ============= */
+/* ===== Роутер ===== */
 const nav=document.querySelector('nav'), content=document.getElementById('content');
 nav.addEventListener('click',e=>{
   if(e.target.tagName!=='BUTTON') return;
   [...nav.children].forEach(b=>b.classList.remove('active'));
   e.target.classList.add('active');
- const tabs = {
-  home,
-  expenses,
-  incomes,
-  work
-};
- function render(tab){tabs[tab](document.getElementById('content'));}
   render(e.target.dataset.tab);
 });
 const sum=a=>a.reduce((s,x)=>s+x.amount,0);
 
-/* ============== Главная ============== */
-async function home(root){
-  root.innerHTML=`
-    <!-- уже было -->
-    <section>
-      <h2>Доходы / Расходы</h2>
-      <canvas id="pie"></canvas>
-    </section>
-    <section>
-      <h2>Доходы</h2>
-      <ul id="incList"></ul>
-    </section>
-    <section>
-      <h2>Расходы</h2>
-      <ul id="expList"></ul>
-    </section>
+/* ===== Вкладки ===== */
+const tabs={
+  /* Главная */
+  async home(root){
+    root.innerHTML=`
+      <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
+      <section>
+        <h2>Выберите год для подробных диаграмм</h2>
+        <select id="yearSelect">${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}</select>
+      </section>
+      <section><h2>Доходы по месяцам (убывание)</h2><canvas id="incChart"></canvas></section>
+      <section><h2>Расходы по месяцам (убывание)</h2><canvas id="expChart"></canvas></section>
+      <section><h2>Зарплата по месяцам (убывание)</h2><canvas id="salChart"></canvas></section>`;
 
-    <!-- новые диаграммы -->
-    <section>
-      <h2>Выберите год для подробных диаграмм</h2>
-      <select id="yearSelect">
-        ${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
-      </select>
-    </section>
-    <section>
-      <h2>Доходы по месяцам (убывание)</h2>
-      <canvas id="incChart"></canvas>
-    </section>
-    <section>
-      <h2>Расходы по месяцам (убывание)</h2>
-      <canvas id="expChart"></canvas>
-    </section>
-    <section>
-      <h2>Зарплата по месяцам (убывание)</h2>
-      <canvas id="salChart"></canvas>
-    </section>
-  `;
+    const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
+    pie(document.getElementById('pie'),['Доходы','Расходы'],[sum(inc),sum(exp)]);
 
-  /* ---------- старый код списков ---------- */
-  const [inc, exp] = await Promise.all([getAll('incomes'), getAll('expenses')]);
-  const sum = arr => arr.reduce((a, b) => a + b.amount, 0);
-  const totalInc = sum(inc);
-  const totalExp = sum(exp);
+    const yearSel=root.querySelector('#yearSelect');
+    yearSel.addEventListener('change',drawCharts);
+    drawCharts();
+    async function drawCharts(){
+      const y=yearSel.value;
+      const incM=Array(12).fill(0), expM=Array(12).fill(0), salM=Array(12).fill(0);
+      (await getAll('incomes')).forEach(r=>{
+        const d=new Date(r.date); if(d.getFullYear()==y){incM[d.getMonth()]+=r.amount; if(r.category==='Зарплата') salM[d.getMonth()]+=r.amount;}
+      });
+      (await getAll('expenses')).forEach(r=>{const d=new Date(r.date); if(d.getFullYear()==y) expM[d.getMonth()]+=r.amount;});
+      const m=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+      bar(root.querySelector('#incChart'),m,incM);
+      bar(root.querySelector('#expChart'),m,expM);
+      bar(root.querySelector('#salChart'),m,salM);
+    }
+  },
 
-  root.querySelector('#incList').innerHTML = inc.map(i=>`<li>${i.amount}₽ – ${i.source} (${i.date})<span class="actions"><button onclick="editIncome(${i.id})">✏</button><button onclick="remove('incomes',${i.id})">✖</button></span></li>`).join('');
-  root.querySelector('#expList').innerHTML = exp.map(e=>`<li>${e.amount}₽ – ${e.target} (${e.category}, ${e.date})<span class="actions"><button onclick="editExpense(${e.id})">✏</button><button onclick="remove('expenses',${e.id})">✖</button></span></li>`).join('');
-  pie(document.getElementById('pie'), ['Доходы','Расходы'], [totalInc, totalExp]);
-
-  /* ---------- новые диаграммы ---------- */
-  const yearSel = root.querySelector('#yearSelect');
-  yearSel.addEventListener('change', drawCharts);
-  drawCharts();
-
-  async function drawCharts(){
-    const year = yearSel.value;
-    const [incSnap, expSnap] = await Promise.all([getAll('incomes'), getAll('expenses')]);
-
-    const incByMonth = Array(12).fill(0);
-    const expByMonth = Array(12).fill(0);
-    const salByMonth = Array(12).fill(0);
-
-    incSnap.forEach(r=>{
-      const d = new Date(r.date);
-      if(d.getFullYear() === +year){
-        incByMonth[d.getMonth()] += r.amount;
-        if(r.category === 'Зарплата') salByMonth[d.getMonth()] += r.amount;
-      }
-    });
-    expSnap.forEach(r=>{
-      const d = new Date(r.date);
-      if(d.getFullYear() === +year) expByMonth[d.getMonth()] += r.amount;
-    });
-
-    const months = Array.from({length:12},(_,i)=>new Date(0,i).toLocaleString('ru',{month:'short'}));
-
-    /* сортируем по убыванию суммы, но сохраняем месяц */
-    const sortedInc = months.map((m,i)=>({label:m, val:incByMonth[i]})).sort((a,b)=>b.val-a.val);
-    const sortedExp = months.map((m,i)=>({label:m, val:expByMonth[i]})).sort((a,b)=>b.val-a.val);
-    const sortedSal = months.map((m,i)=>({label:m, val:salByMonth[i]})).sort((a,b)=>b.val-a.val);
-
-    bar(root.querySelector('#incChart'), sortedInc.map(x=>x.label), sortedInc.map(x=>x.val));
-    bar(root.querySelector('#expChart'), sortedExp.map(x=>x.label), sortedExp.map(x=>x.val));
-    bar(root.querySelector('#salChart'), sortedSal.map(x=>x.label), sortedSal.map(x=>x.val));
-  }
-}
-
+  /* Расходы */
   async expenses(root){
     root.innerHTML=`
-      <section><h2>Добавить расход</h2><form id="expForm">
-        <input name="amount" type="number" placeholder="Сумма" required/>
-        <input name="date" type="date" required/>
-        <input name="target" placeholder="Куда потрачено" required/>
-        <select name="category"><option value="Супермаркеты">Супермаркеты</option><option value="Развлечения">Развлечения</option><option value="Транспорт">Транспорт</option><option value="Такси">Такси</option><option value="Маркетплейсы">Маркетплейсы</option><option value="Долги">Долги</option><option value="custom">Своя категория…</option></select>
-        <input name="custom" placeholder="Своя категория" style="display:none"/>
-        <button>Добавить</button>
-      </form></section>
+      <section>
+        <h2>Добавить расход</h2>
+        <form id="expForm">
+          <input name="amount" type="number" placeholder="Сумма" required>
+          <input name="date" type="date" required>
+          <input name="target" placeholder="Куда потрачено" required>
+          <select name="category">
+            <option value="Супермаркеты">Супермаркеты</option><option value="Развлечения">Развлечения</option>
+            <option value="Транспорт">Транспорт</option><option value="Такси">Такси</option>
+            <option value="Маркетплейсы">Маркетплейсы</option><option value="Долги">Долги</option>
+            <option value="custom">Своя категория…</option>
+          </select>
+          <input name="custom" placeholder="Своя категория" style="display:none">
+          <button>Добавить</button>
+        </form>
+      </section>
       <section><h2>История</h2><ul id="expList"></ul></section>`;
     const form=root.querySelector('#expForm'), list=root.querySelector('#expList');
     form.category.addEventListener('change',e=>form.custom.style.display=e.target.value==='custom'?'block':'none');
-    form.addEventListener('submit',async e=>{e.preventDefault();const {amount,date,target,category,custom}=form.elements;await add('expenses',{amount:+amount.value,date:date.value,target:target.value,category:category.value==='custom'?custom.value:category.value});form.reset(); refresh();});
-    async function refresh(){list.innerHTML=(await getAll('expenses')).map(e=>`<li>${e.amount}₽ – ${e.target} (${e.category}, ${e.date})<span class="actions"><button onclick="editExpense(${e.id})">✏</button><button onclick="remove('expenses',${e.id})">✖</button></span></li>`).join('');}
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const {amount,date,target,category,custom}=form.elements;
+      await add('expenses',{amount:+amount.value,date:date.value,target:target.value,category:category.value==='custom'?custom.value:category.value});
+      form.reset(); refresh();
+    });
+    async function refresh(){
+      list.innerHTML=(await getAll('expenses')).map(e=>`<li>${e.amount}₽ – ${e.target} (${e.category}, ${e.date})<button onclick="del('expenses',${e.id}).then(refresh)">✖</button></li>`).join('');
+    }
     refresh();
   },
 
+  /* Доходы */
   async incomes(root){
     root.innerHTML=`
-      <section><h2>Добавить доход</h2><form id="incForm">
-        <input name="amount" type="number" placeholder="Сумма" required/>
-        <input name="date" type="date" required/>
-        <input name="source" placeholder="Источник" required/>
-        <select name="category"><option value="Пособие">Пособие</option><option value="Зарплата">Зарплата</option><option value="Помощь">Помощь</option><option value="Другое">Другое</option><option value="custom">Своя категория…</option></select>
-        <input name="custom" placeholder="Своя категория" style="display:none"/>
-        <button>Добавить</button>
-      </form></section>
+      <section>
+        <h2>Добавить доход</h2>
+        <form id="incForm">
+          <input name="amount" type="number" placeholder="Сумма" required>
+          <input name="date" type="date" required>
+          <input name="source" placeholder="Источник" required>
+          <select name="category"><option value="Пособие">Пособие</option><option value="Зарплата">Зарплата</option><option value="Помощь">Помощь</option><option value="Другое">Другое</option><option value="custom">Своя категория…</option></select>
+          <input name="custom" placeholder="Своя категория" style="display:none">
+          <button>Добавить</button>
+        </form>
+      </section>
       <section><h2>История</h2><ul id="incList"></ul></section>`;
     const form=root.querySelector('#incForm'), list=root.querySelector('#incList');
     form.category.addEventListener('change',e=>form.custom.style.display=e.target.value==='custom'?'block':'none');
-    form.addEventListener('submit',async e=>{e.preventDefault();const {amount,date,source,category,custom}=form.elements;await add('incomes',{amount:+amount.value,date:date.value,source:source.value,category:category.value==='custom'?custom.value:category.value});form.reset();refresh();});
-    async function refresh(){list.innerHTML=(await getAll('incomes')).map(i=>`<li>${i.amount}₽ – ${i.source} (${i.category}, ${i.date})<span class="actions"><button onclick="editIncome(${i.id})">✏</button><button onclick="remove('incomes',${i.id})">✖</button></span></li>`).join('');}
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const {amount,date,source,category,custom}=form.elements;
+      await add('incomes',{amount:+amount.value,date:date.value,source:source.value,category:category.value==='custom'?custom.value:category.value});
+      form.reset(); refresh();
+    });
+    async function refresh(){
+      list.innerHTML=(await getAll('incomes')).map(i=>`<li>${i.amount}₽ – ${i.source} (${i.category}, ${i.date})<button onclick="del('incomes',${i.id}).then(refresh)">✖</button></li>`).join('');
+    }
     refresh();
   },
 
+  /* Работа */
   work(root){
     root.innerHTML=`
       <nav class="sub">
@@ -218,14 +184,16 @@ async function home(root){
   }
 };
 
+/* ===== Доп. функции для «Работа» ===== */
 async function positions(root){
   root.innerHTML=`
-    <section><h2>Добавить позицию</h2>
+    <section>
+      <h2>Добавить позицию</h2>
       <form id="posForm">
-        <input name="name" placeholder="Название" required/>
-        <input name="holes" type="number" step="0.01" placeholder="Отверстий на 1к" required/>
-        <input name="sets"  type="number" step="0.01" placeholder="Комплектов" required/>
-        <input name="price" type="number" step="0.01" placeholder="Цена за 1 отверстие (₽)" required/>
+        <input name="name" placeholder="Название" required>
+        <input name="holes" type="number" step="0.01" placeholder="Отверстий на 1к" required>
+        <input name="sets"  type="number" step="0.01" placeholder="Комплектов" required>
+        <input name="price" type="number" step="0.01" placeholder="Цена за 1 отверстие (₽)" required>
         <button>Добавить</button>
       </form>
     </section>
@@ -234,181 +202,72 @@ async function positions(root){
   form.addEventListener('submit',async e=>{
     e.preventDefault();
     const {name,holes,sets,price}=form.elements;
-    await add('positions',{
-      name:name.value.trim(),
-      holes:parseFloat(holes.value.replace(',','.')),
-      sets :parseFloat(sets.value.replace(',','.')),
-      price:parseFloat(price.value.replace(',','.'))
-    });
+    await add('positions',{name:name.value.trim(),holes:+holes.value,sets:+sets.value,price:+price.value});
     form.reset(); refresh();
   });
   async function refresh(){
     const items=await getAll('positions');
     items.sort((a,b)=>a.name.localeCompare(b.name));
-    list.innerHTML=items.map(p=>`
-      <li>
-        ${p.name} | ${p.holes} отв/1к | ${p.sets} компл | ${p.price}₽/отв
-        <span class="actions">
-          <button onclick="editPosition(${p.id})">✏</button>
-          <button onclick="remove('positions',${p.id})">✖</button>
-        </span>
-      </li>`).join('');
+    list.innerHTML=items.map(p=>`<li>${p.name} | ${p.holes} отв/1к | ${p.sets} компл | ${p.price}₽/отв <button onclick="del('positions',${p.id}).then(refresh)">✖</button></li>`).join('');
   }
   refresh();
 }
 
-/* ---------- выработка ---------- */
 async function log(root){
   const positions=await getAll('positions');
   root.innerHTML=`
-    <section>
-      <h2>Заработок ${new Date().getFullYear()}</h2>
-      <canvas id="bar"></canvas>
-    </section>
+    <section><h2>Заработок ${new Date().getFullYear()}</h2><canvas id="bar"></canvas></section>
     <section>
       <h2>Добавить выработку</h2>
       <input type="date" id="date" required>
-      <div id="addForm" style="display:none; display:flex; flex-direction:column; gap:8px;">
+      <div id="addForm" style="display:none; flex-direction:column; gap:8px;">
         <select id="posSelect">${positions.map(p=>`<option value="${p.id}">${p.name}</option>`)}</select>
-        <input id="setsInput" type="number" min="0.01" step="0.01" placeholder="Комплектов">
-        <input id="priceInput" type="number" min="0.01" step="0.01" placeholder="Цена за 1 отверстие (₽)">
+        <input id="sets" type="number" step="0.01" placeholder="Комплектов" min="0.01">
+        <input id="price" type="number" step="0.01" placeholder="Цена за 1 отверстие (₽)" min="0.01">
         <button id="saveBtn">Сохранить</button>
       </div>
       <ul id="dayList"></ul>
       <p id="dayTotal"></p>
     </section>`;
-
-  const dateSel=root.querySelector('#date');
-  const formDiv=root.querySelector('#addForm');
-  const posSel=root.querySelector('#posSelect');
-  const setsInp=root.querySelector('#setsInput');
-  const priceInp=root.querySelector('#priceInput');
-  const saveBtn=root.querySelector('#saveBtn');
-  const dayList=root.querySelector('#dayList');
-  const dayTotal=root.querySelector('#dayTotal');
-
-  dateSel.addEventListener('change', loadDay);
-  saveBtn.addEventListener('click', async ()=>{
-    const posId = +posSel.value;
-    const sets  = parseFloat(setsInp.value.replace(',', '.'));
-    const price = parseFloat(priceInp.value.replace(',', '.'));
-    if(isNaN(sets) || isNaN(price) || sets<=0 || price<=0){ alert('Введите корректные числа'); return; }
-
-    const pos = positions.find(p=>p.id===posId);
-    const holesTotal = pos.holes * sets;
-    const earned     = (holesTotal * price).toFixed(2);
-
-    await add('worklog', {
-      posId,
-      sets,
-      price,          // цена за 1 отверстие
-      date: dateSel.value,
-      earned: +earned
-    });
-    loadDay();
-    refreshBar();
+  const dateSel=root.querySelector('#date'), formDiv=root.querySelector('#addForm'), posSel=root.querySelector('#posSelect'), setsInp=root.querySelector('#sets'), priceInp=root.querySelector('#price'), saveBtn=root.querySelector('#saveBtn'), dayList=root.querySelector('#dayList'), dayTotal=root.querySelector('#dayTotal');
+  dateSel.addEventListener('change',loadDay);
+  saveBtn.addEventListener('click',async ()=>{
+    const posId=+posSel.value, sets=+setsInp.value, price=+priceInp.value;
+    if(!sets||!price){ alert('Введите корректные числа'); return; }
+    const pos=positions.find(p=>p.id===posId);
+    const earned=(pos.holes*sets*price).toFixed(2);
+    await add('worklog',{posId,sets,price,date:dateSel.value,earned:+earned});
+    loadDay(); refreshBar();
   });
-
   async function loadDay(){
-    const d = dateSel.value;
-    const logs = await getAll('worklog');
-    const filtered = logs.filter(l=>l.date===d);
-    dayList.innerHTML = filtered.map(l=>{
-      const p = positions.find(p=>p.id===l.posId);
-      return `<li>
-        ${p.name} | ${p.holes*l.sets} отв | ${l.sets} компл | 
-        ${l.price}₽/отв | ${l.earned}₽ итого
-        <span class="actions">
-          <button onclick="editWorklog(${l.id})">✏</button>
-          <button onclick="remove('worklog',${l.id})">✖</button>
-        </span>
-      </li>`;
+    const d=dateSel.value;
+    const logs=await getAll('worklog');
+    const filtered=logs.filter(l=>l.date===d);
+    dayList.innerHTML=filtered.map(l=>{
+      const p=positions.find(p=>p.id===l.posId);
+      return `<li>${p.name} | ${p.holes*l.sets} отв | ${l.sets} компл | ${l.price}₽/отв | ${l.earned}₽ итого <button onclick="del('worklog',${l.id}).then(loadDay)">✖</button></li>`;
     }).join('');
-
-    const totalEarned = filtered.reduce((a,b)=>a+b.earned,0).toFixed(2);
-    const totalSets   = filtered.reduce((a,b)=>a+b.sets,0);
-    const totalHoles  = filtered.reduce((a,b)=>{
-      const p = positions.find(p=>p.id===b.posId);
-      return a + p.holes*b.sets;
-    },0);
-    dayTotal.textContent = `Итого: ${totalHoles} отв, ${totalSets} компл, ${totalEarned}₽`;
+    const totalEarned=filtered.reduce((a,b)=>a+b.earned,0).toFixed(2);
+    const totalSets=filtered.reduce((a,b)=>a+b.sets,0);
+    const totalHoles=filtered.reduce((a,b)=>{const p=positions.find(p=>p.id===b.posId);return a+p.holes*b.sets;},0);
+    dayTotal.textContent=`Итого: ${totalHoles} отв, ${totalSets} компл, ${totalEarned}₽`;
     formDiv.style.display='block';
   }
-
-  /* ---------- график за год ---------- */
   async function refreshBar(){
-    const logs = await getAll('worklog');
-    const byMonth = Array(12).fill(0);
-    logs.forEach(l=>{
-      const m = new Date(l.date).getMonth();
-      byMonth[m] += l.earned;
-    });
-    bar(root.querySelector('#bar'), ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'], byMonth);
+    const logs=await getAll('worklog');
+    const byMonth=Array(12).fill(0);
+    logs.forEach(l=>{const m=new Date(l.date).getMonth();byMonth[m]+=l.earned});
+    bar(root.querySelector('#bar'),['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'],byMonth);
   }
   refreshBar();
 }
 
-/* ======== Редактирование / удаление ======== */
+/* ===== Редактирование / удаление ===== */
 window.remove=async (store,id)=>{if(confirm('Удалить?')){await del(store,id);render(document.querySelector('button.active').dataset.tab);}};
 
-/* Редактировать расход */
-window.editExpense=async id=>{
-  const items=await getAll('expenses'), item=items.find(i=>i.id===id);
-  const newAmount=prompt('Новая сумма',item.amount);
-  if(newAmount===null) return;
-  const newTarget=prompt('Новое место',item.target);
-  if(newTarget===null) return;
-  const newCat=prompt('Новая категория',item.category);
-  if(newCat===null) return;
-  await put('expenses',{...item,amount:+newAmount,target:newTarget,category:newCat});
-  render('expenses');
-};
-
-/* Редактировать доход */
-window.editIncome=async id=>{
-  const items=await getAll('incomes'), item=items.find(i=>i.id===id);
-  const newAmount=prompt('Новая сумма',item.amount);
-  if(newAmount===null) return;
-  const newSource=prompt('Новый источник',item.source);
-  if(newSource===null) return;
-  const newCat=prompt('Новая категория',item.category);
-  if(newCat===null) return;
-  await put('incomes',{...item,amount:+newAmount,source:newSource,category:newCat});
-  render('incomes');
-};
-
-/* Редактировать позицию */
-window.editPosition=async id=>{
-  const items=await getAll('positions'), item=items.find(i=>i.id===id);
-  const newName=prompt('Название',item.name); if(newName===null) return;
-  const newHoles=prompt('Отверстий на 1к',item.holes); if(newHoles===null) return;
-  const newSets=prompt('Комплектов',item.sets); if(newSets===null) return;
-  const newPrice=prompt('Цена за 1к',item.price); if(newPrice===null) return;
-  await put('positions',{...item,name:newName,holes:+newHoles,sets:+newSets,price:+newPrice});
-  render('work');
-};
-
-/* Редактировать запись выработки */
-window.editWorklog=async id=>{
-  const logs=await getAll('worklog'), logItem=logs.find(l=>l.id===id);
-  const positions=await getAll('positions');
-  const pos=positions.find(p=>p.id===logItem.posId);
-  const newSets=prompt('Комплектов',logItem.sets); if(newSets===null) return;
-  const newDate=prompt('Дата (YYYY-MM-DD)',logItem.date); if(newDate===null) return;
-  await put('worklog',{...logItem,sets:+newSets,date:newDate,earned:+newSets*pos.price});
-  render('work');
-};
-
 /* старт */
-function render(tab){tabs[tab](document.getElementById('content'));}
+function render(tab){tabs[tab](content);}
 render('home');
 </script>
 </body>
-
 </html>
-
-
-
-
-
-
