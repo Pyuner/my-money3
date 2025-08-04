@@ -388,6 +388,12 @@ window.editWorklog=async id=>{
   const pos=positions.find(p=>p.id===logItem.posId);
   const newSets=prompt('Комплектов',logItem.sets); if(newSets===null) return;
   const newDate=prompt('Дата (YYYY-MM-DD)',logItem.date); if(newDate===null) return;
+ const tabs = {
+  home,        // уже есть
+  expenses,    // добавьте
+  incomes,     // добавьте
+  work         // добавьте
+};
   await put('worklog',{...logItem,sets:+newSets,date:newDate,earned:+newSets*pos.price});
   render('work');
 };
@@ -399,6 +405,7 @@ render('home');
 </body>
 
 </html>
+
 
 
 
