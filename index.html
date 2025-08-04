@@ -71,7 +71,8 @@ nav.addEventListener('click',e=>{
 });
 const sum=a=>a.reduce((s,x)=>s+x.amount,0);
 
- async home(r){
+const tabs={
+  async home(r){
     const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
     r.innerHTML=`
       <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
@@ -408,5 +409,6 @@ render('home');
 </body>
 
 </html>
+
 
 
