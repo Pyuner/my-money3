@@ -71,78 +71,53 @@ const sum=a=>a.reduce((s,x)=>s+x.amount,0);
 /* ===== Вкладки ===== */
 const tabs={
   /* Главная */
-  async home(root){/* ===== Главная ===== */
-async function home(root){
-  const [inc, exp] = await Promise.all([getAll('incomes'), getAll('expenses')]);
+  async home(root){
+    const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
+    /* сводные суммы по категориям */
+    const incCats={},expCats={};
+    inc.forEach(r=>incCats[r.category]=(incCats[r.category]||0)+r.amount);
+    exp.forEach(r=>expCats[r.category]=(expCats[r.category]||0)+r.amount);
 
-  /* сводная по категориям */
-  const incCats = {}, expCats = {};
-  inc.forEach(r => incCats[r.category] = (incCats[r.category] || 0) + r.amount);
-  exp.forEach(r => expCats[r.category] = (expCats[r.category] || 0) + r.amount);
+    root.innerHTML=`
+      <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
 
-  root.innerHTML = `
-    <section>
-      <h2>Доходы / Расходы</h2>
-      <canvas id="pie"></canvas>
-    </section>
+      <section><h2>Доходы по категориям</h2>
+        <ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul>
+      </section>
 
-    <!-- Доходы по категориям -->
-    <section>
-      <h2>Доходы по категориям</h2>
-      <ul>
-        ${Object.entries(incCats)
-          .sort(([,a],[,b]) => b - a)
-          .map(([cat, sum]) => `<li>${cat}: ${sum.toFixed(2)}₽</li>`)
-          .join('')}
-      </ul>
-    </section>
+      <section><h2>Расходы по категориям</h2>
+        <ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul>
+      </section>
 
-    <!-- Расходы по категориям -->
-    <section>
-      <h2>Расходы по категориям</h2>
-      <ul>
-        ${Object.entries(expCats)
-          .sort(([,a],[,b]) => b - a)
-          .map(([cat, sum]) => `<li>${cat}: ${sum.toFixed(2)}₽</li>`)
-          .join('')}
-      </ul>
-    </section>
+      <section>
+        <h2>Выберите год для подробных диаграмм</h2>
+        <select id="yearSelect">
+          ${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
+        </select>
+      </section>
+      <section><h2>Доходы по месяцам (убывание)</h2><canvas id="incChart"></canvas></section>
+      <section><h2>Расходы по месяцам (убывание)</h2><canvas id="expChart"></canvas></section>
+      <section><h2>Зарплата по месяцам (убывание)</h2><canvas id="salChart"></canvas></section>`;
 
-    <!-- диаграммы по годам -->
-    <section>
-      <h2>Выберите год для подробных диаграмм</h2>
-      <select id="yearSelect">
-        ${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
-      </select>
-    </section>
-    <section><h2>Доходы по месяцам (убывание)</h2><canvas id="incChart"></canvas></section>
-    <section><h2>Расходы по месяцам (убывание)</h2><canvas id="expChart"></canvas></section>
-    <section><h2>Зарплата по месяцам (убывание)</h2><canvas id="salChart"></canvas></section>
-  `;
+    const totalInc=Object.values(incCats).reduce((a,b)=>a+b,0);
+    const totalExp=Object.values(expCats).reduce((a,b)=>a+b,0);
+    pie(document.getElementById('pie'),['Доходы','Расходы'],[totalInc,totalExp]);
 
-  const totalInc = Object.values(incCats).reduce((a,b)=>a+b,0);
-  const totalExp = Object.values(expCats).reduce((a,b)=>a+b,0);
-  pie(document.getElementById('pie'), ['Доходы','Расходы'], [totalInc, totalExp]);
-
-  /* остальные диаграммы ... */
-  const yearSel = root.querySelector('#yearSelect');
-  yearSel.addEventListener('change', drawCharts);
-  drawCharts();
-  async function drawCharts(){
-    const y = yearSel.value;
-    const incByMonth = Array(12).fill(0);
-    const expByMonth = Array(12).fill(0);
-    const salByMonth = Array(12).fill(0);
-    (await getAll('incomes')).forEach(r=>{
-      const d=new Date(r.date); if(d.getFullYear()==y){incByMonth[d.getMonth()]+=r.amount; if(r.category==='Зарплата') salByMonth[d.getMonth()]+=r.amount;}
-    });
-    (await getAll('expenses')).forEach(r=>{const d=new Date(r.date); if(d.getFullYear()==y) expByMonth[d.getMonth()]+=r.amount;});
-    const months=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
-    bar(root.querySelector('#incChart'),months,incByMonth);
-    bar(root.querySelector('#expChart'),months,expByMonth);
-    bar(root.querySelector('#salChart'),months,salByMonth);
-  }
-}
+    const yearSel=root.querySelector('#yearSelect');
+    yearSel.addEventListener('change',drawCharts);
+    drawCharts();
+    async function drawCharts(){
+      const y=yearSel.value;
+      const incM=Array(12).fill(0),expM=Array(12).fill(0),salM=Array(12).fill(0);
+      (await getAll('incomes')).forEach(r=>{
+        const d=new Date(r.date); if(d.getFullYear()==y){incM[d.getMonth()]+=r.amount; if(r.category==='Зарплата') salM[d.getMonth()]+=r.amount;}
+      });
+      (await getAll('expenses')).forEach(r=>{const d=new Date(r.date); if(d.getFullYear()==y) expM[d.getMonth()]+=r.amount;});
+      const m=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+      bar(root.querySelector('#incChart'),m,incM);
+      bar(root.querySelector('#expChart'),m,expM);
+      bar(root.querySelector('#salChart'),m,salM);
+    }
   },
 
   /* Расходы */
@@ -151,7 +126,7 @@ async function home(root){
       <section>
         <h2>Добавить расход</h2>
         <form id="expForm">
-          <input name="amount" type="number" placeholder="Сумма" required>
+          <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
           <input name="date" type="date" required>
           <input name="target" placeholder="Куда потрачено" required>
           <select name="category">
@@ -185,7 +160,7 @@ async function home(root){
       <section>
         <h2>Добавить доход</h2>
         <form id="incForm">
-          <input name="amount" type="number" placeholder="Сумма" required>
+          <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
           <input name="date" type="date" required>
           <input name="source" placeholder="Источник" required>
           <select name="category"><option value="Пособие">Пособие</option><option value="Зарплата">Зарплата</option><option value="Помощь">Помощь</option><option value="Другое">Другое</option><option value="custom">Своя категория…</option></select>
@@ -218,81 +193,18 @@ async function home(root){
       </nav>
       <div id="workRoot"></div>`;
     const sub=root.querySelector('.sub'), wr=root.querySelector('#workRoot');
-    sub.addEventListener('click',e=>{
-      if(!e.target.dataset.sub) return;
+
+    function switchSub(tab){
       [...sub.children].forEach(b=>b.classList.remove('active'));
-      e.target.classList.add('active');
-      e.target.dataset.sub==='positions'?positions(wr):log(wr);
-    });
-    positions(wr);
-     /* ==== Статистика ==== */
-  async function stats(root){
-    root.innerHTML=`
-      <section>
-        <h2>Статистика за месяц</h2>
-        <label>Месяц
-          <select id="monthSel">
-            ${Array.from({length:12},(_,m)=>`<option value="${m}">${new Date(0,m).toLocaleString('ru',{month:'long'})}</option>`).join('')}
-          </select>
-        </label>
-        <label>Год
-          <select id="yearSel">
-            ${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
-          </select>
-        </label>
-        <ul id="statsList"></ul>
-      </section>`;
-
-    const monthSel=root.querySelector('#monthSel');
-    const yearSel=root.querySelector('#yearSel');
-    const list=root.querySelector('#statsList');
-
-    [monthSel,yearSel].forEach(sel=>sel.addEventListener('change',refresh));
-    refresh();
-
-    async function refresh(){
-      const month=+monthSel.value;
-      const year=+yearSel.value;
-      const logs=await getAll('worklog');
-      const positions=await getAll('positions');
-
-      /* фильтр по месяцу и году */
-      const filtered=logs.filter(l=>{
-        const d=new Date(l.date);
-        return d.getMonth()===month && d.getFullYear()===year;
-      });
-
-      /* группируем по наименованию */
-      const map=new Map();
-      filtered.forEach(l=>{
-        const name=positions.find(p=>p.id===l.posId)?.name || '—';
-        const cur=map.get(name)||{count:0,sets:0};
-        cur.count+=1;
-        cur.sets+=l.sets;
-        map.set(name,cur);
-      });
-
-      /* выводим */
-      list.innerHTML=[...map.entries()]
-        .map(([name,{count,sets}])=>`<li>${name} – ${count} раз(а) – ${sets} компл.</li>`)
-        .join('');
+      document.querySelector(`[data-sub="${tab}"]`).classList.add('active');
+      ({positions,log,stats}[tab])(wr);
     }
-  }
-
-  /* ==== переключение под-вкладок ==== */
-  sub.addEventListener('click',e=>{
-    if(!e.target.dataset.sub) return;
-    [...sub.children].forEach(b=>b.classList.remove('active'));
-    e.target.classList.add('active');
-    const fn={positions,log,stats}[e.target.dataset.sub];
-    fn(wr);
-  });
-  positions(wr);   // стартовая
-}
+    sub.addEventListener('click',e=>{if(e.target.dataset.sub) switchSub(e.target.dataset.sub)});
+    positions(wr);
   }
 };
 
-/* ===== Доп. функции для «Работа» ===== */
+/* ===== Доп. функции для Работа ===== */
 async function positions(root){
   root.innerHTML=`
     <section>
@@ -370,6 +282,42 @@ async function log(root){
   refreshBar();
 }
 
+async function stats(root){
+  const positions=await getAll('positions');
+  root.innerHTML=`
+    <section>
+      <h2>Статистика за месяц</h2>
+      <label>Месяц
+        <select id="monthSel">
+          ${Array.from({length:12},(_,m)=>`<option value="${m}">${new Date(0,m).toLocaleString('ru',{month:'long'})}</option>`).join('')}
+        </select>
+      </label>
+      <label>Год
+        <select id="yearSel">
+          ${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
+        </select>
+      </label>
+      <ul id="statsList"></ul>
+    </section>`;
+  const monthSel=root.querySelector('#monthSel'), yearSel=root.querySelector('#yearSel'), list=root.querySelector('#statsList');
+  [monthSel,yearSel].forEach(sel=>sel.addEventListener('change',refresh));
+  refresh();
+  async function refresh(){
+    const month=+monthSel.value, year=+yearSel.value;
+    const logs=await getAll('worklog'), positions=await getAll('positions');
+    const filtered=logs.filter(l=>{const d=new Date(l.date); return d.getMonth()===month && d.getFullYear()===year});
+    const map=new Map();
+    filtered.forEach(l=>{
+      const name=positions.find(p=>p.id===l.posId)?.name || '—';
+      const cur=map.get(name)||{count:0,sets:0};
+      cur.count+=1;
+      cur.sets+=l.sets;
+      map.set(name,cur);
+    });
+    list.innerHTML=[...map.entries()].map(([name,{count,sets}])=>`<li>${name} – ${count} раз – ${sets} компл.</li>`).join('');
+  }
+}
+
 /* ===== Редактирование / удаление ===== */
 window.remove=async (store,id)=>{if(confirm('Удалить?')){await del(store,id);render(document.querySelector('button.active').dataset.tab);}};
 
@@ -379,5 +327,3 @@ render('home');
 </script>
 </body>
 </html>
-
-
