@@ -71,16 +71,6 @@ nav.addEventListener('click',e=>{
 });
 const sum=a=>a.reduce((s,x)=>s+x.amount,0);
 
-const tabs={
-  async home(r){
-    const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
-    r.innerHTML=`
-      <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
-      <section><h2>Доходы</h2><ul>${inc.map(i=>`<li>${i.amount}₽ – ${i.source} (${i.date})<span class="actions"><button onclick="editIncome(${i.id})">✏</button><button onclick="remove('incomes',${i.id})">✖</button></span></li>`).join('')}</ul></section>
-      <section><h2>Расходы</h2><ul>${exp.map(e=>`<li>${e.amount}₽ – ${e.target} (${e.category}, ${e.date})<span class="actions"><button onclick="editExpense(${e.id})">✏</button><button onclick="remove('expenses',${e.id})">✖</button></span></li>`).join('')}</ul></section>`;
-    pie(document.getElementById('pie'),['Доходы','Расходы'],[sum(inc),sum(exp)]);
-  },
-
 /* ============== Главная ============== */
 async function home(root){
   root.innerHTML=`
@@ -409,6 +399,7 @@ render('home');
 </body>
 
 </html>
+
 
 
 
