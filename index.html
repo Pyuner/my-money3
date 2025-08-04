@@ -138,17 +138,40 @@ const tabs={
 
 async function positions(root){
   root.innerHTML=`
-    <section><h2>Добавить позицию</h2><form id="posForm">
-      <input name="name" placeholder="Название" required/>
-      <input name="holes" type="number" placeholder="Отверстий на 1к" required/>
-      <input name="sets" type="number" placeholder="Комплектов" required/>
-      <input name="price" type="number" placeholder="Цена за 1к" required/>
-      <button>Добавить</button>
-    </form></section>
+    <section><h2>Добавить позицию</h2>
+      <form id="posForm">
+        <input name="name" placeholder="Название" required/>
+        <input name="holes" type="number" step="0.01" placeholder="Отверстий на 1к" required/>
+        <input name="sets"  type="number" step="0.01" placeholder="Комплектов" required/>
+        <input name="price" type="number" step="0.01" placeholder="Цена за 1 отверстие (₽)" required/>
+        <button>Добавить</button>
+      </form>
+    </section>
     <section><h2>Позиции (А-Я)</h2><ul id="posList"></ul></section>`;
   const form=root.querySelector('#posForm'), list=root.querySelector('#posList');
-  form.addEventListener('submit',async e=>{e.preventDefault();const {name,holes,sets,price}=form.elements;await add('positions',{name:name.value.trim(),holes:+holes.value,sets:+sets.value,price:+price.value});form.reset();refresh();});
-  async function refresh(){const items=await getAll('positions');items.sort((a,b)=>a.name.localeCompare(b.name));list.innerHTML=items.map(p=>`<li>${p.name} | ${p.holes} отв/1к | ${p.sets} компл | ${p.holes*p.price}₽<span class="actions"><button onclick="editPosition(${p.id})">✏</button><button onclick="remove('positions',${p.id})">✖</button></span></li>`).join('');}
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const {name,holes,sets,price}=form.elements;
+    await add('positions',{
+      name:name.value.trim(),
+      holes:parseFloat(holes.value.replace(',','.')),
+      sets :parseFloat(sets.value.replace(',','.')),
+      price:parseFloat(price.value.replace(',','.'))
+    });
+    form.reset(); refresh();
+  });
+  async function refresh(){
+    const items=await getAll('positions');
+    items.sort((a,b)=>a.name.localeCompare(b.name));
+    list.innerHTML=items.map(p=>`
+      <li>
+        ${p.name} | ${p.holes} отв/1к | ${p.sets} компл | ${p.price}₽/отв
+        <span class="actions">
+          <button onclick="editPosition(${p.id})">✏</button>
+          <button onclick="remove('positions',${p.id})">✖</button>
+        </span>
+      </li>`).join('');
+  }
   refresh();
 }
 
@@ -301,3 +324,4 @@ render('home');
 </body>
 
 </html>
+
