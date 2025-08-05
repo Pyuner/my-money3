@@ -64,17 +64,12 @@
 <script type="module">
 /* ===== 1.  Firebase Config (ЗАМЕНИТЕ НА СВОЙ) ===== */
 const firebaseConfig = {
-"type": "service_account",
-  "project_id": "my-money-4cb7e",
-  "private_key_id": "e7242a0286d277ca51bd4810b6c65a9f357c5793",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCkTnT1P+JSL37y\nrS5nPhx2pzzZnYk5WqAgl5y2Z3cMJ5FxgsCiP7OrXaxL8ruMgcNz2yaOUm9iCnqm\ndqqu5ckymz1xMoO/VIqRmc3j0iqYw/04OFajCNatLzylOo5IHbI1XoPdyXpa+mxz\nZ/IAVD+yVJiwH/PLOnXGfMpHdjL2kLB6BnNtu3koCPxYTtNQcKrXD1PzY4Ikdkni\nZveHsDNqSnb2u3T+/DzhT2/RxPpK4FOigT0tUZOxFeaWq5EfKk49Dlzq4WwHhUBi\n4Tqyzv+fw+3B4XAnwqH1aMDFlg1Q8NSkfVQoy3G9RDpp5y19GY+8cA3ztrUdUPkK\nuS2Rb1ijAgMBAAECggEAAj/w5sUMQ/vjo3kXYs0dSUKAGSqVe+7LX6OsWI6kdMJi\nEuDrfIbZxQ0ovNUWIKtL7d04CG7Jh7bnN+TkiiSaM385idnSuFRS6ptDfwRTp3S1\nJwNI31cV4BhUDY3uAOHrvu1Dv04O1/BmNsHsX2gMLkwYLNyrJEc1i0zJzGbmKL5y\nWynqXRKYZSvWchImzTQysrj2XJMkbNkBe+ddkHdD7LE0MiDq5fw61zAtEH+EO3bD\n6yKXXJ+ZY2fOj8q1zjpbQUrLHmHmq2og5mon0UN04uMrn6mMMQcmpUn34iqFD+rY\n/vY9Fx4b8ZQyq2o8ul0r5XH+o+bXgkXgEh620YDfhQKBgQDSmFfqa4Bou0XJJSct\n3CQOtW6Ekog9GvyNqQ0jPrwV1C33HR0MzKuvdQzax/EbTXafbpKr9fmh/UMj7NyN\nlX8OMvz2O4bEaYuw77D5s/BjxJAhF4SaDoFXeVd2AAB+t4c4LTEKssbZUdYKz23O\ngkhzFJJ0XXI+yGrr2Sr/haOIFQKBgQDHuz5nN03ruA6rqUe/gOPCfGy93HKl991u\naBqBoXK+g9OJtiK/9QTmBoPqRKXp1gkamVOryl5XLzU4N7vJZ/DVp4TLHqBaRgE6\n7a5Wjqhc8I23X9PPl30LosHGDNYlSslsU8LpAGgyh+YfW5ssgQgFP6CQWE9WfYIF\nK0iW3yST1wKBgDdP1f92/sIDNeAPxwuPf1TxqDZfujK6bMzUMuQn7QSatvvphKDA\n/PLXfmnUC+qM3PQg+Zr6vvch6sl7w63YLwfOsowFtG7P/eWZ/tSGw0Og8+4NHEHO\nP4B3GVafx4GAuJ4zmGbj78BSczJhqsiLhXXcWF8B0CjXQOXzIwz7z6jFAoGAFAtN\nguxA7KQHDOErKyPTN6RnAVLLSq6qUTcvWc0LB+WQ6CQYLq13NWJ4AJ2tDN+HAF1c\n0UO43gUF0UN+nALLX5W1NPE45HZcDz7lHRip+tHFVx7N0eqBCRbnXWnSX+G2fyGU\n0O9Shaevx3vZAcldNbGh+npyU9q6nqwuV73DHPcCgYANUpD72+4917ZiVsqYeJH/\nvK6ydYlPUgToWWRFBEXUACzT9VlSuOJ/qnlPiYypW9U8MLlas6v01B0zamaB4FXF\nF0H5op7u6AAGhb01hwNUXgBsDNB7bnNWUc+M/3RWsk5lZSMf4pu2XU7fK8/5JA6l\nUyrQ0S5xhdy7D2HkC+sYTA==\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase-adminsdk-fbsvc@my-money-4cb7e.iam.gserviceaccount.com",
-  "client_id": "114027792495672776212",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40my-money-4cb7e.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com""
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "123",
+  appId: "1:123:web:abc"
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
