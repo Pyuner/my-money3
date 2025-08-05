@@ -5,20 +5,43 @@
 <title>Домашняя бухгалтерия</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
- :root{--accent:#007bff;--bg:#f7f7f7;--card:#fff;--text:#333;--border:#e0e0e0}
-*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-body{background:var(--bg);color:var(--text)}
-nav,.sub{display:flex;background:var(--card);border-bottom:1px solid var(--border)}
-nav button,.sub button{flex:1;padding:14px;border:none;background:none;cursor:pointer;font-weight:600}
-nav button.active,.sub button.active{color:var(--accent);border-bottom:2px solid var(--accent)}
-main{padding:20px;max-width:800px;margin:auto}
-section{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:20px}
-form{display:grid;gap:12px}
-input,select,button{padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:1rem}
-button[type=submit]{background:var(--accent);color:#fff;cursor:pointer}
-ul{list-style:none}li{padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-canvas{width:100%!important;height:300px!important}
-.actions button{margin-left:4px;background:none;border:1px solid var(--border);cursor:pointer;font-size:.8rem;padding:2px 6px;border-radius:3px}
+ :root{
+   --accent:#007bff;
+   --bg:#f7f7f7;
+   --card:#fff;
+   --text:#333;
+   --border:#e0e0e0;
+   --success:#28a745;
+   --warning:#ffc107;
+   --danger:#dc3545;
+ }
+ [data-theme="dark"]{
+   --bg:#121212;
+   --card:#1e1e1e;
+   --text:#eee;
+   --border:#444;
+ }
+ *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+ body{background:var(--bg);color:var(--text);transition:.2s}
+ nav,.sub{display:flex;background:var(--card);border-bottom:1px solid var(--border)}
+ nav button,.sub button{flex:1;padding:14px;border:none;background:none;cursor:pointer;font-weight:600}
+ nav button.active,.sub button.active{color:var(--accent);border-bottom:2px solid var(--accent)}
+ main{padding:20px;max-width:800px;margin:auto}
+ section{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:20px}
+ form{display:grid;gap:12px}
+ input,select,button{padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:1rem}
+ button[type=submit]{background:var(--accent);color:#fff;cursor:pointer}
+ ul{list-style:none}li{padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+ canvas{width:100%!important;height:300px!important}
+ .filter-bar{display:flex;gap:8px;margin-bottom:10px}
+ .filter-bar button{padding:4px 8px;font-size:.8rem;border:1px solid var(--border);border-radius:4px;background:#fff}
+ [data-theme="dark"] .filter-bar button{background:#222}
+ .search-box{margin-bottom:10px}
+ .tag-red{background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
+ .tag-yellow{background:var(--warning);color:#000;padding:2px 6px;border-radius:4px;font-size:.7rem}
+ .tag-green{background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
+ .theme-btn{margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer}
+ .cloud-btn{margin-left:8px}
 </style>
 </head>
 <body>
@@ -28,96 +51,127 @@ canvas{width:100%!important;height:300px!important}
   <button data-tab="expenses">Расходы</button>
   <button data-tab="incomes">Доходы</button>
   <button data-tab="work">Работа</button>
+  <button class="theme-btn" id="themeToggle" title="Тёмная тема">🌙</button>
+  <button class="theme-btn cloud-btn" id="syncToggle" title="Синхронизация">☁️</button>
 </nav>
 
 <main id="content"></main>
 
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
 <script type="module">
-/* ===== IndexedDB ===== */
+/* ===== 1.  Firebase Config (ЗАМЕНИТЕ НА СВОЙ) ===== */
+const firebaseConfig = {
+"type": "service_account",
+  "project_id": "my-money-4cb7e",
+  "private_key_id": "e7242a0286d277ca51bd4810b6c65a9f357c5793",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCkTnT1P+JSL37y\nrS5nPhx2pzzZnYk5WqAgl5y2Z3cMJ5FxgsCiP7OrXaxL8ruMgcNz2yaOUm9iCnqm\ndqqu5ckymz1xMoO/VIqRmc3j0iqYw/04OFajCNatLzylOo5IHbI1XoPdyXpa+mxz\nZ/IAVD+yVJiwH/PLOnXGfMpHdjL2kLB6BnNtu3koCPxYTtNQcKrXD1PzY4Ikdkni\nZveHsDNqSnb2u3T+/DzhT2/RxPpK4FOigT0tUZOxFeaWq5EfKk49Dlzq4WwHhUBi\n4Tqyzv+fw+3B4XAnwqH1aMDFlg1Q8NSkfVQoy3G9RDpp5y19GY+8cA3ztrUdUPkK\nuS2Rb1ijAgMBAAECggEAAj/w5sUMQ/vjo3kXYs0dSUKAGSqVe+7LX6OsWI6kdMJi\nEuDrfIbZxQ0ovNUWIKtL7d04CG7Jh7bnN+TkiiSaM385idnSuFRS6ptDfwRTp3S1\nJwNI31cV4BhUDY3uAOHrvu1Dv04O1/BmNsHsX2gMLkwYLNyrJEc1i0zJzGbmKL5y\nWynqXRKYZSvWchImzTQysrj2XJMkbNkBe+ddkHdD7LE0MiDq5fw61zAtEH+EO3bD\n6yKXXJ+ZY2fOj8q1zjpbQUrLHmHmq2og5mon0UN04uMrn6mMMQcmpUn34iqFD+rY\n/vY9Fx4b8ZQyq2o8ul0r5XH+o+bXgkXgEh620YDfhQKBgQDSmFfqa4Bou0XJJSct\n3CQOtW6Ekog9GvyNqQ0jPrwV1C33HR0MzKuvdQzax/EbTXafbpKr9fmh/UMj7NyN\nlX8OMvz2O4bEaYuw77D5s/BjxJAhF4SaDoFXeVd2AAB+t4c4LTEKssbZUdYKz23O\ngkhzFJJ0XXI+yGrr2Sr/haOIFQKBgQDHuz5nN03ruA6rqUe/gOPCfGy93HKl991u\naBqBoXK+g9OJtiK/9QTmBoPqRKXp1gkamVOryl5XLzU4N7vJZ/DVp4TLHqBaRgE6\n7a5Wjqhc8I23X9PPl30LosHGDNYlSslsU8LpAGgyh+YfW5ssgQgFP6CQWE9WfYIF\nK0iW3yST1wKBgDdP1f92/sIDNeAPxwuPf1TxqDZfujK6bMzUMuQn7QSatvvphKDA\n/PLXfmnUC+qM3PQg+Zr6vvch6sl7w63YLwfOsowFtG7P/eWZ/tSGw0Og8+4NHEHO\nP4B3GVafx4GAuJ4zmGbj78BSczJhqsiLhXXcWF8B0CjXQOXzIwz7z6jFAoGAFAtN\nguxA7KQHDOErKyPTN6RnAVLLSq6qUTcvWc0LB+WQ6CQYLq13NWJ4AJ2tDN+HAF1c\n0UO43gUF0UN+nALLX5W1NPE45HZcDz7lHRip+tHFVx7N0eqBCRbnXWnSX+G2fyGU\n0O9Shaevx3vZAcldNbGh+npyU9q6nqwuV73DHPcCgYANUpD72+4917ZiVsqYeJH/\nvK6ydYlPUgToWWRFBEXUACzT9VlSuOJ/qnlPiYypW9U8MLlas6v01B0zamaB4FXF\nF0H5op7u6AAGhb01hwNUXgBsDNB7bnNWUc+M/3RWsk5lZSMf4pu2XU7fK8/5JA6l\nUyrQ0S5xhdy7D2HkC+sYTA==\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@my-money-4cb7e.iam.gserviceaccount.com",
+  "client_id": "114027792495672776212",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40my-money-4cb7e.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com""
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* ===== 2.  IndexedDB ===== */
 const DB_NAME='finance', DB_VER=2;
 async function openDB(){
   return new Promise((res,rej)=>{
     const r=indexedDB.open(DB_NAME,DB_VER);
     r.onerror=()=>rej(r.error);
     r.onsuccess=()=>res(r.result);
-    r.onupgradeneeded=()=>{
-      const db=r.result;
-      ['expenses','incomes','positions','worklog'].forEach(s=>{
-        if(!db.objectStoreNames.contains(s)) db.createObjectStore(s,{keyPath:'id',autoIncrement:true});
-      });
-    };
+    r.onupgradeneeded=()=>{const db=r.result;['expenses','incomes','positions','worklog'].forEach(s=>{if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:'id',autoIncrement:true})})};
   });
 }
-async function add(s,o){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).add(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
-async function put(s,o){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).put(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
-async function getAll(s){const db=await openDB();return new Promise((res,rej)=>{const q=db.transaction(s,'readonly').objectStore(s).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
-async function del(s,id){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).delete(id);q.onsuccess=res;q.onerror=()=>rej(q.error);});}
+async function add(s,o){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).add(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+async function put(s,o){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).put(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+async function getAll(s){const db=await openDB();return new Promise((res,rej)=>{const q=db.transaction(s,'readonly').objectStore(s).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+async function del(s,id){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).delete(id);q.onsuccess=res;q.onerror=()=>rej(q.error)})}
 
-/* ===== Chart.js ===== */
+/* ===== 3.  Chart.js ===== */
 import Chart from 'https://cdn.jsdelivr.net/npm/chart.js@4/auto/+esm';
-function pie(ctx,lbl,data){new Chart(ctx,{type:'pie',data:{labels:lbl,datasets:[{data,backgroundColor:['#28a745','#dc3545']}]},options:{responsive:true,maintainAspectRatio:false}});}
-function bar(ctx,lbl,data){new Chart(ctx,{type:'bar',data:{labels:lbl,datasets:[{label:'₽',data,backgroundColor:'#007bff'}]},options:{responsive:true,maintainAspectRatio:false}});}
+function pie(ctx,lbl,data){new Chart(ctx,{type:'pie',data:{labels:lbl,datasets:[{data,backgroundColor:['#28a745','#dc3545']}]},options:{responsive:true,maintainAspectRatio:false}})}
+function bar(ctx,lbl,data){new Chart(ctx,{type:'bar',data:{labels:lbl,datasets:[{label:'₽',data,backgroundColor:'#007bff'}]},options:{responsive:true,maintainAspectRatio:false}})}
 
-/* ===== Роутер ===== */
+/* ===== 4.  Тема ===== */
+const themeToggle=document.getElementById('themeToggle');
+themeToggle.addEventListener('click',()=>{
+  const dark=document.documentElement.dataset.theme==='dark';
+  document.documentElement.dataset.theme=dark?'light':'dark';
+  themeToggle.textContent=dark?'🌙':'☀️';
+  localStorage.setItem('theme',document.documentElement.dataset.theme);
+});
+document.documentElement.dataset.theme=localStorage.getItem('theme')||'light';
+themeToggle.textContent=document.documentElement.dataset.theme==='dark'?'☀️':'🌙';
+
+/* ===== 5.  Синхронизация ===== */
+let syncEnabled=false;
+const syncBtn=document.getElementById('syncToggle');
+syncBtn.addEventListener('click',async()=>{
+  syncEnabled=!syncEnabled;
+  syncBtn.style.color=syncEnabled?'var(--accent)':'';
+  if(!syncEnabled) return;
+  ['expenses','incomes','positions','worklog'].forEach(async t=>{
+    const local=await getAll(t);
+    local.forEach(async r=>{
+      await db.collection(t).doc(r.id.toString()).set(r);
+    });
+  });
+  alert('Данные отправлены в облако!');
+});
+
+/* ===== 6.  Роутер ===== */
 const nav=document.querySelector('nav'), content=document.getElementById('content');
 nav.addEventListener('click',e=>{
-  if(e.target.tagName!=='BUTTON') return;
+  if(!e.target.dataset.tab) return;
   [...nav.children].forEach(b=>b.classList.remove('active'));
   e.target.classList.add('active');
   render(e.target.dataset.tab);
 });
 const sum=a=>a.reduce((s,x)=>s+x.amount,0);
 
-/* ===== Вкладки ===== */
+/* ===== 7.  Вкладки ===== */
 const tabs={
+
   /* Главная */
   async home(root){
     const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
-    /* сводные суммы по категориям */
     const incCats={},expCats={};
     inc.forEach(r=>incCats[r.category]=(incCats[r.category]||0)+r.amount);
     exp.forEach(r=>expCats[r.category]=(expCats[r.category]||0)+r.amount);
 
     root.innerHTML=`
       <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
+      <section><h2>Доходы по категориям</h2><ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li><span class="tag-${rColor(c)}"></span>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>
+      <section><h2>Расходы по категориям</h2><ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li><span class="tag-${rColor(c)}"></span>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>
 
-      <section><h2>Доходы по категориям</h2>
-        <ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul>
-      </section>
-
-      <section><h2>Расходы по категориям</h2>
-        <ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul>
+      <section>
+        <h2>Накопления по дням</h2>
+        <canvas id="balanceChart"></canvas>
       </section>
 
       <section>
-        <h2>Выберите год для подробных диаграмм</h2>
-        <select id="yearSelect">
-          ${Array.from({length:11},(_,i)=>2020+i).map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
-        </select>
-      </section>
-      <section><h2>Доходы по месяцам (убывание)</h2><canvas id="incChart"></canvas></section>
-      <section><h2>Расходы по месяцам (убывание)</h2><canvas id="expChart"></canvas></section>
-      <section><h2>Зарплата по месяцам (убывание)</h2><canvas id="salChart"></canvas></section>`;
+        <h2>Фильтр по дате</h2>
+        <div class="filter-bar">
+          <button data-filter="today">Сегодня</button>
+          <button data-filter="week">Неделя</button>
+          <button data-filter="month">Месяц</button>
+        </div>
+        <input type="text" id="searchInput" placeholder="Поиск…" class="search-box">
+        <ul id="homeList"></ul>
+      </section>`;
 
     const totalInc=Object.values(incCats).reduce((a,b)=>a+b,0);
     const totalExp=Object.values(expCats).reduce((a,b)=>a+b,0);
     pie(document.getElementById('pie'),['Доходы','Расходы'],[totalInc,totalExp]);
-
-    const yearSel=root.querySelector('#yearSelect');
-    yearSel.addEventListener('change',drawCharts);
-    drawCharts();
-    async function drawCharts(){
-      const y=yearSel.value;
-      const incM=Array(12).fill(0),expM=Array(12).fill(0),salM=Array(12).fill(0);
-      (await getAll('incomes')).forEach(r=>{
-        const d=new Date(r.date); if(d.getFullYear()==y){incM[d.getMonth()]+=r.amount; if(r.category==='Зарплата') salM[d.getMonth()]+=r.amount;}
-      });
-      (await getAll('expenses')).forEach(r=>{const d=new Date(r.date); if(d.getFullYear()==y) expM[d.getMonth()]+=r.amount;});
-      const m=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
-      bar(root.querySelector('#incChart'),m,incM);
-      bar(root.querySelector('#expChart'),m,expM);
-      bar(root.querySelector('#salChart'),m,salM);
-    }
+    drawBalanceChart(inc,exp);
+    drawHomeList(inc.concat(exp.map(e=>({...e,type:'exp'}))));
   },
 
   /* Расходы */
@@ -136,22 +190,22 @@ const tabs={
             <option value="custom">Своя категория…</option>
           </select>
           <input name="custom" placeholder="Своя категория" style="display:none">
+          <select name="color">
+            <option value="green">🟢</option><option value="yellow">🟡</option><option value="red">🔴</option>
+          </select>
           <button>Добавить</button>
         </form>
       </section>
-      <section><h2>История</h2><ul id="expList"></ul></section>`;
-    const form=root.querySelector('#expForm'), list=root.querySelector('#expList');
-    form.category.addEventListener('change',e=>form.custom.style.display=e.target.value==='custom'?'block':'none');
-    form.addEventListener('submit',async e=>{
-      e.preventDefault();
-      const {amount,date,target,category,custom}=form.elements;
-      await add('expenses',{amount:+amount.value,date:date.value,target:target.value,category:category.value==='custom'?custom.value:category.value});
-      form.reset(); refresh();
-    });
-    async function refresh(){
-      list.innerHTML=(await getAll('expenses')).map(e=>`<li>${e.amount}₽ – ${e.target} (${e.category}, ${e.date})<button onclick="del('expenses',${e.id}).then(refresh)">✖</button></li>`).join('');
-    }
-    refresh();
+      <section>
+        <div class="filter-bar">
+          <button data-filter="today">Сегодня</button>
+          <button data-filter="week">Неделя</button>
+          <button data-filter="month">Месяц</button>
+        </div>
+        <input type="text" id="expSearch" placeholder="Поиск…" class="search-box">
+        <ul id="expList"></ul>
+      </section>`;
+    await renderList(root,'expenses','#expForm','#expList','#expSearch');
   },
 
   /* Доходы */
@@ -165,22 +219,22 @@ const tabs={
           <input name="source" placeholder="Источник" required>
           <select name="category"><option value="Пособие">Пособие</option><option value="Зарплата">Зарплата</option><option value="Помощь">Помощь</option><option value="Другое">Другое</option><option value="custom">Своя категория…</option></select>
           <input name="custom" placeholder="Своя категория" style="display:none">
+          <select name="color">
+            <option value="green">🟢</option><option value="yellow">🟡</option><option value="red">🔴</option>
+          </select>
           <button>Добавить</button>
         </form>
       </section>
-      <section><h2>История</h2><ul id="incList"></ul></section>`;
-    const form=root.querySelector('#incForm'), list=root.querySelector('#incList');
-    form.category.addEventListener('change',e=>form.custom.style.display=e.target.value==='custom'?'block':'none');
-    form.addEventListener('submit',async e=>{
-      e.preventDefault();
-      const {amount,date,source,category,custom}=form.elements;
-      await add('incomes',{amount:+amount.value,date:date.value,source:source.value,category:category.value==='custom'?custom.value:category.value});
-      form.reset(); refresh();
-    });
-    async function refresh(){
-      list.innerHTML=(await getAll('incomes')).map(i=>`<li>${i.amount}₽ – ${i.source} (${i.category}, ${i.date})<button onclick="del('incomes',${i.id}).then(refresh)">✖</button></li>`).join('');
-    }
-    refresh();
+      <section>
+        <div class="filter-bar">
+          <button data-filter="today">Сегодня</button>
+          <button data-filter="week">Неделя</button>
+          <button data-filter="month">Месяц</button>
+        </div>
+        <input type="text" id="incSearch" placeholder="Поиск…" class="search-box">
+        <ul id="incList"></ul>
+      </section>`;
+    await renderList(root,'incomes','#incForm','#incList','#incSearch');
   },
 
   /* Работа */
@@ -193,18 +247,54 @@ const tabs={
       </nav>
       <div id="workRoot"></div>`;
     const sub=root.querySelector('.sub'), wr=root.querySelector('#workRoot');
-
-    function switchSub(tab){
-      [...sub.children].forEach(b=>b.classList.remove('active'));
-      document.querySelector(`[data-sub="${tab}"]`).classList.add('active');
-      ({positions,log,stats}[tab])(wr);
-    }
-    sub.addEventListener('click',e=>{if(e.target.dataset.sub) switchSub(e.target.dataset.sub)});
+    sub.addEventListener('click',e=>{if(!e.target.dataset.sub) return; [...sub.children].forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); ({positions,log,stats}[e.target.dataset.sub])(wr);});
     positions(wr);
   }
 };
 
-/* ===== Доп. функции для Работа ===== */
+/* ===== Общие вспомогательные ===== */
+function rColor(str){const h=str.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%3; return ['green','yellow','red'][h];}
+function drawBalanceChart(inc,exp){
+  const days={};
+  inc.forEach(r=>{const d=r.date; days[d]=(days[d]||0)+r.amount});
+  exp.forEach(r=>{const d=r.date; days[d]=(days[d]||0)-r.amount});
+  const sortedDays=Object.keys(days).sort();
+  const running=sortedDays.reduce((a,d)=>{a.push((a.at(-1)||0)+days[d]); return a;},[]);
+  bar(document.getElementById('balanceChart'),sortedDays,running);
+}
+function filterDate(records,type){   // today / week / month
+  const now=new Date();
+  return records.filter(r=>{
+    const d=new Date(r.date);
+    if(type==='today') return d.toDateString()===now.toDateString();
+    if(type==='week'){const weekAgo=new Date();weekAgo.setDate(now.getDate()-7);return d>=weekAgo;}
+    if(type==='month'){const monthAgo=new Date();monthAgo.setMonth(now.getMonth()-1);return d>=monthAgo;}
+    return true;
+  });
+}
+function renderSearch(listEl,records,search){   // live search
+  const term=search.toLowerCase();
+  listEl.innerHTML=records.filter(r=>JSON.stringify(r).toLowerCase().includes(term))
+    .map(r=>`<li>${r.amount}₽ – ${r.target||r.source||''} (${r.category}, ${r.date})<button onclick="del('${r.type||'expenses'}',${r.id}).then(()=>location.reload())">✖</button></li>`).join('');
+}
+async function renderList(root,store,formSel,listSel,searchSel){
+  const form=root.querySelector(formSel),list=root.querySelector(listSel),search=root.querySelector(searchSel);
+  const records=await getAll(store);
+  const show=(recs=records)=>{renderSearch(list,recs.map(r=>({...r,type:store})),search.value);}
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(form);
+    const obj={amount:+fd.get('amount'),date:fd.get('date'),category:fd.get('category')==='custom'?fd.get('custom'):fd.get('category'),color:fd.get('color')||'green'};
+    if(store==='expenses') obj.target=fd.get('target'); else obj.source=fd.get('source');
+    await add(store,obj);
+    form.reset(); show();
+  });
+  search.addEventListener('input',()=>show(filterDate(records,'all')));
+  root.querySelectorAll('.filter-bar button').forEach(btn=>btn.addEventListener('click',()=>show(filterDate(records,btn.dataset.filter))));
+  show();
+}
+
+/* ===== Доп. функции Работа ===== */
 async function positions(root){
   root.innerHTML=`
     <section>
@@ -318,10 +408,7 @@ async function stats(root){
   }
 }
 
-/* ===== Редактирование / удаление ===== */
-window.remove=async (store,id)=>{if(confirm('Удалить?')){await del(store,id);render(document.querySelector('button.active').dataset.tab);}};
-
-/* старт */
+/* ===== 8.  Запуск ===== */
 function render(tab){tabs[tab](content);}
 render('home');
 </script>
