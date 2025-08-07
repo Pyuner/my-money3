@@ -43,6 +43,8 @@
  .theme-btn{margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer}
  .cloud-btn{margin-left:8px}
 </style>
+<!-- Firebase Auth -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
 <body>
 
@@ -51,8 +53,16 @@
   <button data-tab="expenses">Расходы</button>
   <button data-tab="incomes">Доходы</button>
   <button data-tab="work">Работа</button>
-  <button class="theme-btn" id="themeToggle" title="Тёмная тема">🌙</button>
-  <button class="theme-btn cloud-btn" id="syncToggle" title="Синхронизация">☁️</button>
+
+  <!-- 🔐 Блок авторизации -->
+  <span id="authSection">
+    <button id="loginBtn" onclick="loginForm()">Войти</button>
+    <button id="registerBtn" onclick="registerForm()">Регистрация</button>
+    <span id="userInfo" style="display:none;">
+      <button onclick="location.href='/profile.html'">Личный кабинет</button>
+      <button onclick="logout()">Выйти</button>
+    </span>
+  </span>
 </nav>
 
 <main id="content"></main>
@@ -62,8 +72,22 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script type="module">
+
+let hasSub = false;
+async function checkSubscription() {
+  if (!currentUser) return;
+  const snap = await db.collection('users').doc(currentUser.uid).get();
+  const data = snap.data();
+  const sub = data?.sub_until?.toDate();
+  hasSub = sub && sub > new Date();
+  if (!hasSub) {
+    alert("Для полного доступа нужна активная подписка. Перейдите в личный кабинет.");
+  }
+}
+
 /* ===== 1.  Firebase Config (ЗАМЕНИТЕ НА СВОЙ) ===== */
 const firebaseConfig = {
+
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT.firebaseapp.com",
   projectId: "YOUR_PROJECT",
@@ -73,6 +97,68 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
+
+
+// ---------- Auth ----------
+let currentUser = null;
+
+auth.onAuthStateChanged(async user => {
+  currentUser = user;
+  if (user) {
+    document.getElementById('loginBtn').style.display = 'none';
+    document.getElementById('registerBtn').style.display = 'none';
+    document.getElementById('userInfo').style.display = 'inline';
+    await checkSubscription();
+  } else {
+    document.getElementById('loginBtn').style.display = 'inline';
+    document.getElementById('registerBtn').style.display = 'inline';
+    document.getElementById('userInfo').style.display = 'none';
+  }
+});
+
+function loginForm() {
+  document.getElementById('authTitle').textContent = 'Вход';
+  document.getElementById('name').style.display = 'none';
+  document.getElementById('authModal').style.display = 'block';
+  mode = 'login';
+}
+function registerForm() {
+  document.getElementById('authTitle').textContent = 'Регистрация';
+  document.getElementById('name').style.display = 'inline';
+  document.getElementById('authModal').style.display = 'block';
+  mode = 'register';
+}
+function closeAuth() {
+  document.getElementById('authModal').style.display = 'none';
+}
+let mode = 'login';
+async function submitAuth() {
+  const email = document.getElementById('email').value;
+  const pwd = document.getElementById('password').value;
+  const name = document.getElementById('name').value;
+  try {
+    if (mode === 'login') {
+      await auth.signInWithEmailAndPassword(email, pwd);
+    } else {
+      await auth.createUserWithEmailAndPassword(email, pwd);
+      await db.collection('users').doc(auth.currentUser.uid).set({
+        name,
+        email,
+        reg_date: new Date(),
+        sub_until: null,
+        first_sub: null,
+        sub_buys: 0
+      });
+    }
+    closeAuth();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+function logout() {
+  auth.signOut();
+}
 
 /* ===== 2.  IndexedDB ===== */
 const DB_NAME='finance', DB_VER=2;
@@ -84,10 +170,31 @@ async function openDB(){
     r.onupgradeneeded=()=>{const db=r.result;['expenses','incomes','positions','worklog'].forEach(s=>{if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:'id',autoIncrement:true})})};
   });
 }
-async function add(s,o){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).add(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
-async function put(s,o){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).put(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+async function add(s,o){
+  if (!hasSub) {
+    alert("Для добавления данных нужна активная подписка.");
+    return;
+  }
+  o.owner = currentUser?.uid || null;
+  const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).add(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})
+}
+async function put(s,o){
+ async function put(s,o){
+  if (!hasSub) {
+    alert("Для изменения данных нужна активная подписка.");
+    return;
+  }
+  o.owner = currentUser?.uid || null;
+  const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).put(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})
+}
 async function getAll(s){const db=await openDB();return new Promise((res,rej)=>{const q=db.transaction(s,'readonly').objectStore(s).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
-async function del(s,id){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).delete(id);q.onsuccess=res;q.onerror=()=>rej(q.error)})}
+async function del(s,id){
+  if (!hasSub) {
+    alert("Для удаления данных нужна активная подписка.");
+    return;
+  }
+  const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).delete(id);q.onsuccess=res;q.onerror=()=>rej(q.error)})
+}
 
 /* ===== 3.  Chart.js ===== */
 import Chart from 'https://cdn.jsdelivr.net/npm/chart.js@4/auto/+esm';
@@ -115,7 +222,7 @@ syncBtn.addEventListener('click',async()=>{
   ['expenses','incomes','positions','worklog'].forEach(async t=>{
     const local=await getAll(t);
     local.forEach(async r=>{
-      await db.collection(t).doc(r.id.toString()).set(r);
+      await db.collection(t).doc(r.id.toString()).set({...r, owner: currentUser?.uid || null});
     });
   });
   alert('Данные отправлены в облако!');
@@ -407,5 +514,16 @@ async function stats(root){
 function render(tab){tabs[tab](content);}
 render('home');
 </script>
+<!-- 🔐 Модальное окно -->
+<div id="authModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:#0005; z-index:9999">
+  <div style="background:white; margin:10% auto; padding:20px; width:300px; border-radius:8px">
+    <h3 id="authTitle">Вход</h3>
+    <input id="email" placeholder="Email" type="email"><br>
+    <input id="password" placeholder="Пароль" type="password"><br>
+    <input id="name" placeholder="Имя (по желанию)" style="display:none"><br>
+    <button onclick="submitAuth()">Отправить</button>
+    <button onclick="closeAuth()">Закрыть</button>
+  </div>
+</div>
 </body>
 </html>
