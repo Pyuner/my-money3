@@ -42,6 +42,8 @@
  .tag-green{background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
  .theme-btn{margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer}
  .cloud-btn{margin-left:8px}
+ #authSection{ pointer-events:none; }
+#authSection button{ pointer-events:auto; }
 </style>
 <!-- Firebase Auth -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -686,5 +688,6 @@ render('home');
 </div>
 </body>
 </html>
+
 
 
