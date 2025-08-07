@@ -51,10 +51,15 @@
 <body>
 
 <nav>
-  <button data-tab="home" class="active">Главная</button>
-  <button data-tab="expenses">Расходы</button>
-  <button data-tab="incomes">Доходы</button>
-  <button data-tab="work">Работа</button>
+<button type="button" data-tab="home" class="active">Главная</button>
+  <button type="button" data-tab="expenses">Расходы</button>
+  <button type="button" data-tab="incomes">Доходы</button>
+  <button type="button" data-tab="work">Работа</button>
+
+  <!-- auth (they already have onclick, so keep them as-is) -->
+  <span id="authSection">
+    <button id="loginBtn" onclick="loginForm()">Войти</button>
+    <button id="registerBtn" onclick="registerForm()">Регистрация</button>
 
   <!-- 🔐 Блок авторизации -->
   <span id="authSection">
@@ -688,6 +693,5 @@ render('home');
 </div>
 </body>
 </html>
-
 
 
