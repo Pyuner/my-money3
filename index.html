@@ -54,12 +54,12 @@
   <button type="button" data-tab="incomes">Доходы</button>
   <button type="button" data-tab="work">Работа</button>
 
-  <!-- ✅ Single, clean auth block -->
+  <!-- ✅ кнопки без onclick -->
   <span>
-    <button type="button" id="loginBtn" onclick="loginForm()">Войти</button>
-    <button type="button" id="registerBtn" onclick="registerForm()">Регистрация</button>
+    <button type="button" id="loginBtn">Войти</button>
+    <button type="button" id="registerBtn">Регистрация</button>
     <span id="userInfo" style="display:none">
-      <button type="button" onclick="logout()">Выйти</button>
+      <button type="button" id="logoutBtn">Выйти</button>
     </span>
   </span>
 </nav>
@@ -71,6 +71,14 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script type="module">
+
+/* === Глобальные обработчики === */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('loginBtn').addEventListener('click', loginForm);
+  document.getElementById('registerBtn').addEventListener('click', registerForm);
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+});
+ 
 /* ==========================================================
    0.  GLOBAL VARS
 ========================================================== */
@@ -685,5 +693,6 @@ render('home');
 </div>
 </body>
 </html>
+
 
 
