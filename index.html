@@ -42,8 +42,6 @@
  .tag-green{background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
  .theme-btn{margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer}
  .cloud-btn{margin-left:8px}
- #authSection{ pointer-events:none; }
-#authSection button{ pointer-events:auto; }
 </style>
 <!-- Firebase Auth -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -56,16 +54,16 @@
   <button type="button" data-tab="incomes">Доходы</button>
   <button type="button" data-tab="work">Работа</button>
 
-  <!-- ✅ ONE auth block only -->
+  <!-- ✅ Single, clean auth block -->
   <span>
     <button type="button" id="loginBtn" onclick="loginForm()">Войти</button>
     <button type="button" id="registerBtn" onclick="registerForm()">Регистрация</button>
-    <span id="userInfo" style="display:none;">
+    <span id="userInfo" style="display:none">
       <button type="button" onclick="logout()">Выйти</button>
     </span>
   </span>
 </nav>
-
+ 
 <main id="content"></main>
 
 <!-- Firebase SDK -->
@@ -687,4 +685,5 @@ render('home');
 </div>
 </body>
 </html>
+
 
