@@ -44,9 +44,8 @@
  .cloud-btn{margin-left:8px}
 </style>
 <!-- Firebase Auth -->
-<!-- 1.  ALWAYS first -->
+<!-- keep only these three -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<!-- 2.  THEN auth & firestore -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
@@ -693,15 +692,13 @@ document.addEventListener('DOMContentLoaded', () => {
 render('home');
 </script>
 <!-- 🔐 Модальное окно -->
- <!-- модальное окно -->
-<div id="authModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:#0005; z-index:9999">
-  <div style="background:white; margin:10% auto; padding:20px; width:300px; border-radius:8px">
+ <!-- ONE modal only -->
+<div id="authModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
+  <div style="background:#fff;border-radius:8px;padding:20px;width:300px">
     <h3 id="authTitle">Вход</h3>
     <input id="email" placeholder="Email" type="email"><br>
     <input id="password" placeholder="Пароль" type="password"><br>
     <input id="name" placeholder="Имя (по желанию)" style="display:none"><br>
-
-    <!-- 👇 вот сюда добавляем id -->
     <button id="submitAuthBtn">Отправить</button>
     <button id="closeAuthBtn">Закрыть</button>
   </div>
@@ -718,6 +715,7 @@ render('home');
 </div>
 </body>
 </html>
+
 
 
 
