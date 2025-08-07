@@ -178,7 +178,6 @@ async function add(s,o){
   o.owner = currentUser?.uid || null;
   const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,'readwrite'),q=t.objectStore(s).add(o);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})
 }
-async function put(s,o){
  async function put(s,o){
   if (!hasSub) {
     alert("Для изменения данных нужна активная подписка.");
@@ -527,3 +526,4 @@ render('home');
 </div>
 </body>
 </html>
+
