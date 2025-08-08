@@ -5,6 +5,12 @@
 <title>Домашняя бухгалтерия</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
+ :root {
+  --border: #dee2e6;
+}
+[data-theme="dark"] {
+  --border: #333;
+}
  :root{--accent:#007bff;--bg:#f7f7f7;--card:#fff;--text:#333}
  [data-theme="dark"]{--bg:#121212;--card:#1e1e1e;--text:#eee}
  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
@@ -53,7 +59,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/auto/+esm"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 
 <!-- Modal -->
 <div id="authModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
@@ -68,12 +74,13 @@
 </div>
 
 <script type="module">
+ document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
 /* ---------- 1.  FIREBASE CONFIG ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyAVHxqN7PNgZRpon88Wa_UrF2D2UXufj0Y", // вставьте сюда
-  authDomain: "YOUR-PROJECT.firebaseapp.com",
-  projectId: "YOUR-PROJECT",
-  storageBucket: "YOUR-PROJECT.appspot.com",
+  authDomain: "jobcount-17cd5.firebaseapp.com",
+  projectId: "jobcount-17cd5",
+  storageBucket: "jobcount-17cd5.appspot.com",
   messagingSenderId: "123456789",
   appId: "1:123456789:web:abcdef123456"
 };
@@ -264,4 +271,5 @@ home();
 </script>
 </body>
 </html>
+
 
