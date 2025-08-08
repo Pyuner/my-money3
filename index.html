@@ -56,9 +56,6 @@
 <main id="content"></main>
 
 <!-- Firebase & Chart -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 
 <!-- Modal -->
@@ -74,6 +71,19 @@
 </div>
 
 <script type="module">
+
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+  import { getAuth, fetchSignInMethodsForEmail } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+  const firebaseConfig = { ... };
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Теперь можно использовать fetchSignInMethodsForEmail
+  const methods = await fetchSignInMethodsForEmail(auth, email);
+ 
 await auth.createUserWithEmailAndPassword(email, password)
   .catch((e) => {
     if (e.code === 'auth/email-already-in-use') {
@@ -298,6 +308,7 @@ home();
 </script>
 </body>
 </html>
+
 
 
 
