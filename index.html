@@ -208,8 +208,16 @@ async function init() {
     <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
     <section><h2>Доходы по категориям</h2><ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>
     <section><h2>Расходы по категориям</h2><ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>`;
-    new Chart(document.getElementById('pie'),{type:'pie',data:{labels:['Доходы','Расходы'],datasets:[{data:[totalInc,totalExp],backgroundColor:['#28a745','#dc3545']}]}});
+    new Chart(document.getElementById('pie'), {
+  type: 'pie',
+  data: {
+    labels: ['Доходы', 'Расходы'],
+    datasets: [{
+      data: [totalInc, totalExp],
+      backgroundColor: ['#28a745', '#dc3545']
+    }]
   }
+});
 
   async function expenses(){
     content.innerHTML=`
@@ -295,8 +303,3 @@ init(); // запускаем всё
 </script>
 </body>
 </html>
-
-
-
-
-
