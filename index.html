@@ -9,7 +9,7 @@
  [data-theme="dark"]{--border:#333;--bg:#121212;--card:#1e1e1e;--text:#eee}
  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
  body{background:var(--bg);color:var(--text);transition:.2s}
- nav{display:flex;background:var(--card);border-bottom:1px solid var(--border)}
+ nav{display:flex;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:4px}
  nav button{flex:1;padding:14px;border:none;background:none;cursor:pointer;font-weight:600}
  nav button.active{color:var(--accent);border-bottom:2px solid var(--accent)}
  main{padding:20px;max-width:800px;margin:auto}
@@ -21,6 +21,8 @@
  canvas{width:100%!important;height:300px!important}
  .tag-green{background:#28a745;color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
  .tag-red{background:#dc3545;color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
+ table{border-collapse:collapse;width:100%}
+ th,td{padding:4px 8px;border:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -142,7 +144,6 @@ async function del(store,id){
 
 /* ---------- 3.  AUTH ---------- */
 let mode = 'login';
-
 function loginForm() {
   mode = 'login';
   document.getElementById('authTitle').textContent = 'Вход';
@@ -163,7 +164,6 @@ async function submitAuth() {
   const pwd   = document.getElementById('password').value;
   const name  = document.getElementById('name').value.trim();
   if (!email || !pwd) { alert('Заполните поля'); return; }
-
   try {
     if (mode === 'login') {
       await auth.signInWithEmailAndPassword(email, pwd);
@@ -174,9 +174,7 @@ async function submitAuth() {
       });
     }
     closeAuth();
-  } catch (e) {
-    alert(e.message);
-  }
+  } catch (e) { alert(e.message); }
 }
 function logout() { auth.signOut(); }
 
@@ -270,13 +268,87 @@ async function incomes(){
   const items=await getAll('incomes');
   list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.source} (${r.date}) <button onclick="del('incomes',${r.id}).then(incomes)">✖</button></li>`).join('');
 }
-function work(){ content.innerHTML='<section><h2>Работа</h2><p>Раздел пока пуст</p></section>'; }
 
-/* ---------- 6.  USERS / PROFILE ---------- */
+/* ---------- 6.  WORK (piece-rate wage) ---------- */
+async function work(){
+  content.innerHTML=`
+  <section>
+    <h2>Добавить позицию / расценку</h2>
+    <form id="posForm">
+      <input name="name" placeholder="Название работы" required>
+      <input name="rate" type="number" step="0.01" placeholder="Цена за единицу" required>
+      <button>Добавить</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Записать выполненную работу</h2>
+    <form id="logForm">
+      <select id="posSelect" name="positionId" required></select>
+      <input name="qty" type="number" step="0.01" placeholder="Кол-во" required>
+      <input name="date" type="date" required>
+      <button>Записать</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>История работ и зарплата</h2>
+    <p id="totalWage"><b>Итого: 0 ₽</b></p>
+    <ul id="logList"></ul>
+  </section>`;
+
+  const $ = sel => content.querySelector(sel);
+
+  const refreshPositions = async () => {
+    const pos = await getAll('positions');
+    const sel = $('#posSelect');
+    sel.innerHTML = pos.map(p => `<option value="${p.id}">${p.name} (${p.rate}₽)</option>`).join('');
+    return pos;
+  };
+
+  const refreshLog = async () => {
+    const [log, pos] = await Promise.all([getAll('worklog'), getAll('positions')]);
+    const map = Object.fromEntries(pos.map(p => [p.id, p]));
+    let total = 0;
+    $('#logList').innerHTML = log.map(l => {
+      const p = map[l.positionId];
+      const sum = p ? p.rate * l.qty : 0;
+      total += sum;
+      return `<li>${p?.name || '?'} – ${l.qty} × ${p?.rate || 0}₽ = ${sum.toFixed(2)}₽ (${l.date})
+                <button onclick="del('worklog',${l.id}).then(work)">✖</button></li>`;
+    }).join('');
+    $('#totalWage').innerHTML = `<b>Итого: ${total.toFixed(2)} ₽</b>`;
+  };
+
+  $('#posForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData($('#posForm'));
+    await add('positions', { name: fd.get('name'), rate: +fd.get('rate') });
+    $('#posForm').reset();
+    await refreshPositions();
+  });
+
+  $('#logForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData($('#logForm'));
+    await add('worklog', {
+      positionId: +fd.get('positionId'),
+      qty: +fd.get('qty'),
+      date: fd.get('date')
+    });
+    $('#logForm').reset();
+    await refreshLog();
+  });
+
+  await refreshPositions();
+  await refreshLog();
+}
+
+/* ---------- 7.  USERS / PROFILE ---------- */
 async function users(){
   if (!isAdmin()) return;
   const usersSnap = await db.collection('users').get();
-  let html = '<section><h2>Пользователи</h2><table border=1 cellspacing=0 cellpadding=4><tr><th>Email<th>Имя<th>До подписки<th>Действие</tr>';
+  let html = '<section><h2>Пользователи</h2><table><tr><th>Email<th>Имя<th>До подписки<th>Действие</tr>';
   usersSnap.forEach(doc=>{
     const d = doc.data();
     const active = d.sub_until && new Date() < d.sub_until.toDate();
@@ -291,7 +363,7 @@ async function users(){
 async function checkPayments(){
   if (!isAdmin()) return;
   const snap = await db.collection('payments').where('status','==','pending').get();
-  let html = '<section><h2>Проверка оплат</h2><table border=1 cellspacing=0 cellpadding=4><tr><th>Email<th>Код<th>Действие</tr>';
+  let html = '<section><h2>Проверка оплат</h2><table><tr><th>Email<th>Код<th>Действие</tr>';
   snap.forEach(doc=>{
     const d = doc.data();
     html += `<tr><td>${d.email}<td>${d.code}<td>
@@ -318,7 +390,7 @@ async function confirmPayment(pid){
   checkPayments();
 }
 
-/* ---------- 7.  PROFILE ---------- */
+/* ---------- 8.  PROFILE ---------- */
 async function profile(){
   const user = auth.currentUser;
   if(!user) return loginForm();
@@ -339,12 +411,13 @@ async function profile(){
     <br><button id="deleteProfileBtn">Удалить профиль</button>
   </section>`;
   content.innerHTML = html;
-  if(!active) document.getElementById('buyBtn').onclick = buySub;
-  document.getElementById('applyPromoBtn').onclick = applyPromo;
-  document.getElementById('deleteProfileBtn').onclick = deleteProfile;
+  if(!active) $('#buyBtn').onclick = buySub;
+  $('#applyPromoBtn').onclick = applyPromo;
+  $('#deleteProfileBtn').onclick = deleteProfile;
+  function $(sel){return content.querySelector(sel);}
 }
 
-/* ---------- 8.  SUBSCRIPTION ---------- */
+/* ---------- 9.  SUBSCRIPTION ---------- */
 function buySub(){
   const user = auth.currentUser;
   const code = Math.floor(Math.random()*999999999)+1;
@@ -388,7 +461,7 @@ async function deleteProfile(){
   logout();
 }
 
-/* ---------- 9.  PROMO ADMIN ---------- */
+/* ---------- 10.  PROMO ADMIN ---------- */
 async function promoAdmin(){
   if(!isAdmin()) return;
   const m = prompt('Кол-во месяцев:');
@@ -398,12 +471,12 @@ async function promoAdmin(){
   alert('Промокод: ' + code);
 }
 
-/* ---------- 10.  UTIL ---------- */
+/* ---------- 11.  UTIL ---------- */
 function isAdmin(){
   return auth.currentUser && auth.currentUser.email === 'yanis-20001@mail.ru';
 }
 
-/* ---------- 11.  HANDLERS ---------- */
+/* ---------- 12.  HANDLERS ---------- */
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('loginBtn').addEventListener('click',loginForm);
   document.getElementById('registerBtn').addEventListener('click',registerForm);
@@ -415,7 +488,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('closePromoBtn').addEventListener('click',()=>document.getElementById('promoModal').style.display='none');
 });
 
-/* ---------- 12.  AUTH STATE ---------- */
+/* ---------- 13.  AUTH STATE ---------- */
 auth.onAuthStateChanged(user=>{
   if(user){
     document.getElementById('loginBtn').style.display='none';
@@ -441,7 +514,7 @@ auth.onAuthStateChanged(user=>{
   }
 });
 
-/* ---------- 13.  START ---------- */
+/* ---------- 14.  START ---------- */
 home();
 </script>
 </body>
