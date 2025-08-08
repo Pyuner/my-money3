@@ -5,14 +5,8 @@
 <title>Домашняя бухгалтерия</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
- :root {
-  --border: #dee2e6;
-}
-[data-theme="dark"] {
-  --border: #333;
-}
- :root{--accent:#007bff;--bg:#f7f7f7;--card:#fff;--text:#333}
- [data-theme="dark"]{--bg:#121212;--card:#1e1e1e;--text:#eee}
+ :root{--border:#dee2e6;--accent:#007bff;--bg:#f7f7f7;--card:#fff;--text:#333}
+ [data-theme="dark"]{--border:#333;--bg:#121212;--card:#1e1e1e;--text:#eee}
  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
  body{background:var(--bg);color:var(--text);transition:.2s}
  nav{display:flex;background:var(--card);border-bottom:1px solid var(--border)}
@@ -25,15 +19,6 @@
  button[type=submit]{background:var(--accent);color:#fff;cursor:pointer}
  ul{list-style:none}li{padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
  canvas{width:100%!important;height:300px!important}
- .filter-bar{display:flex;gap:8px;margin-bottom:10px}
- .filter-bar button{padding:4px 8px;font-size:.8rem;border:1px solid var(--border);border-radius:4px;background:#fff}
- [data-theme="dark"] .filter-bar button{background:#222}
- .search-box{margin-bottom:10px}
- .tag-red{background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
- .tag-yellow{background:var(--warning);color:#000;padding:2px 6px;border-radius:4px;font-size:.7rem}
- .tag-green{background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
- #authModal{position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;display:none;align-items:center;justify-content:center;z-index:9999}
- #authModal>div{background:#fff;border-radius:8px;padding:20px;width:300px}
 </style>
 </head>
 <body>
@@ -56,6 +41,9 @@
 <main id="content"></main>
 
 <!-- Firebase & Chart -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 
 <!-- Modal -->
@@ -70,238 +58,216 @@
   </div>
 </div>
 
-<script type="module">
-async function init() {
-  /* ---------- 1.  FIREBASE CONFIG ---------- */
-  const firebaseConfig = {
-    apiKey: "AIzaSyAVHxqN7PNgZRpon88Wa_UrF2D2UXufj0Y",
-    authDomain: "jobcount-17cd5.firebaseapp.com",
-    projectId: "jobcount-17cd5",
-    storageBucket: "jobcount-17cd5.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "1:123456789:web:abcdef123456"
-  };
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
+<script>
+/* ---------- 1.  FIREBASE CONFIG ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAVHxqN7PNgZRpon88Wa_UrF2D2UXufj0Y",
+  authDomain: "jobcount-17cd5.firebaseapp.com",
+  projectId: "jobcount-17cd5",
+  storageBucket: "jobcount-17cd5.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef123456"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-  /* ---------- 2.  MODE & AUTH ---------- */
-  let mode = 'login';
-
-  function loginForm() {
-    mode = 'login';
-    document.getElementById('authTitle').textContent = 'Вход';
-    document.getElementById('name').style.display = 'none';
-    document.getElementById('authModal').style.display = 'flex';
-  }
-
-  function registerForm() {
-    mode = 'register';
-    document.getElementById('authTitle').textContent = 'Регистрация';
-    document.getElementById('name').style.display = 'block';
-    document.getElementById('authModal').style.display = 'flex';
-  }
-
-  function closeAuth() {
-    document.getElementById('authModal').style.display = 'none';
-  }
-
-  async function submitAuth() {
-    const email = document.getElementById('email').value.trim();
-    const pwd = document.getElementById('password').value;
-    const name = document.getElementById('name').value.trim();
-    if (!email || !pwd) { alert('Заполните поля'); return; }
-    try {
-      if (mode === 'login') {
-        await auth.signInWithEmailAndPassword(email, pwd);
-      } else {
-        await auth.createUserWithEmailAndPassword(email, pwd);
-        await db.collection('users').doc(auth.currentUser.uid).set({
-          name,
-          email,
-          reg_date: new Date()
-        });
-      }
-      closeAuth();
-    } catch (e) {
-      if (e.code === 'auth/email-already-in-use') {
-        alert('Email уже зарегистрирован. Попробуйте войти.');
-        loginForm();
-      } else {
-        alert(e.message);
-      }
-    }
-  }
-
-  function logout() {
-    auth.signOut();
-  }
-
-  /* ---------- 3.  INDEXEDDB ---------- */
-  const DB_NAME = 'finance', DB_VER = 2;
-  async function openDB() {
-    return new Promise((res, rej) => {
-      const r = indexedDB.open(DB_NAME, DB_VER);
-      r.onerror = () => rej(r.error);
-      r.onsuccess = () => res(r.result);
-      r.onupgradeneeded = () => {
-        const db = r.result;
-        ['expenses','incomes','positions','worklog'].forEach(s => {
-          if (!db.objectStoreNames.contains(s))
-            db.createObjectStore(s,{keyPath:'id',autoIncrement:true});
-        });
-      };
-    });
-  }
-
-  async function add(store,o){
-    const db = await openDB();
-    return new Promise((res,rej)=>{
-      const q = db.transaction(store,'readwrite').objectStore(store).add(o);
-      q.onsuccess = () => res(q.result);
-      q.onerror   = () => rej(q.error);
-    });
-  }
-
-  async function getAll(store){
-    const db = await openDB();
-    return new Promise((res,rej)=>{
-      const q = db.transaction(store,'readonly').objectStore(store).getAll();
-      q.onsuccess = () => res(q.result);
-      q.onerror   = () => rej(q.error);
-    });
-  }
-
-  async function del(store,id){
-    const db = await openDB();
-    return new Promise((res,rej)=>{
-      const q = db.transaction(store,'readwrite').objectStore(store).delete(id);
-      q.onsuccess = res;
-      q.onerror   = () => rej(q.error);
-    });
-  }
-
-  /* ---------- 4.  TABS ---------- */
-  const nav = document.querySelector('nav');
-  const content = document.getElementById('content');
-  nav.addEventListener('click', e => {
-    if (!e.target.dataset.tab) return;
-    [...nav.children].forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    switch(e.target.dataset.tab){
-      case 'home':    home();break;
-      case 'expenses':expenses();break;
-      case 'incomes': incomes();break;
-      case 'work':    work();break;
-    }
+/* ---------- 2.  INDEXEDDB ---------- */
+const DB_NAME = 'finance', DB_VER = 2;
+function openDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onerror = () => rej(r.error);
+    r.onsuccess = () => res(r.result);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      ['expenses','incomes','positions','worklog'].forEach(s => {
+        if (!db.objectStoreNames.contains(s))
+          db.createObjectStore(s,{keyPath:'id',autoIncrement:true});
+      });
+    };
   });
-
-  /* ---------- 5.  TABS FUNCS ---------- */
-  async function home(){
-    const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
-    const incCats={},expCats={};
-    inc.forEach(r=>incCats[r.category]=(incCats[r.category]||0)+r.amount);
-    exp.forEach(r=>expCats[r.category]=(expCats[r.category]||0)+r.amount);
-    const totalInc=Object.values(incCats).reduce((a,b)=>a+b,0);
-    const totalExp=Object.values(expCats).reduce((a,b)=>a+b,0);
-    content.innerHTML=`
-    <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
-    <section><h2>Доходы по категориям</h2><ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>
-    <section><h2>Расходы по категориям</h2><ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>`;
-    new Chart(document.getElementById('pie'), {
-  type: 'pie',
-  data: {
-    labels: ['Доходы', 'Расходы'],
-    datasets: [{
-      data: [totalInc, totalExp],
-      backgroundColor: ['#28a745', '#dc3545']
-    }]
-  }
-});
- }
-
-  async function expenses(){
-    content.innerHTML=`
-    <section>
-      <h2>Добавить расход</h2>
-      <form id="expForm">
-        <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
-        <input name="date" type="date" required>
-        <input name="target" placeholder="Куда" required>
-        <select name="category"><option>Супермаркеты</option><option>Развлечения</option></select>
-        <button>Добавить</button>
-      </form>
-    </section>
-    <section><ul id="expList"></ul></section>`;
-    const form=document.getElementById('expForm');
-    form.addEventListener('submit',async e=>{
-      e.preventDefault();
-      const fd=new FormData(form);
-      await add('expenses',{amount:+fd.get('amount'),date:fd.get('date'),target:fd.get('target'),category:fd.get('category')});
-      form.reset();
-      expenses();
-    });
-    const list=document.getElementById('expList');
-    const items=await getAll('expenses');
-    list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.target} (${r.date}) <button onclick="del('expenses',${r.id}).then(expenses)">✖</button></li>`).join('');
-  }
-
-  async function incomes(){
-    content.innerHTML=`
-    <section>
-      <h2>Добавить доход</h2>
-      <form id="incForm">
-        <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
-        <input name="date" type="date" required>
-        <input name="source" placeholder="Источник" required>
-        <select name="category"><option>Зарплата</option><option>Пособие</option></select>
-        <button>Добавить</button>
-      </form>
-    </section>
-    <section><ul id="incList"></ul></section>`;
-    const form=document.getElementById('incForm');
-    form.addEventListener('submit',async e=>{
-      e.preventDefault();
-      const fd=new FormData(form);
-      await add('incomes',{amount:+fd.get('amount'),date:fd.get('date'),source:fd.get('source'),category:fd.get('category')});
-      form.reset();
-      incomes();
-    });
-    const list=document.getElementById('incList');
-    const items=await getAll('incomes');
-    list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.source} (${r.date}) <button onclick="del('incomes',${r.id}).then(incomes)">✖</button></li>`).join('');
-  }
-
-  function work(){ content.innerHTML='<section><h2>Работа</h2><p>Раздел пока пуст</p></section>'; }
-
-  /* ---------- 6.  ATTACH HANDLERS ---------- */
-  document.addEventListener('DOMContentLoaded',()=>{
-    document.getElementById('loginBtn').addEventListener('click',loginForm);
-    document.getElementById('registerBtn').addEventListener('click',registerForm);
-    document.getElementById('logoutBtn').addEventListener('click',logout);
-    document.getElementById('submitAuthBtn').addEventListener('click',submitAuth);
-    document.getElementById('closeAuthBtn').addEventListener('click',closeAuth);
+}
+async function add(store,o){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const q = db.transaction(store,'readwrite').objectStore(store).add(o);
+    q.onsuccess = () => res(q.result);
+    q.onerror   = () => rej(q.error);
   });
-
-  /* ---------- 7.  AUTH STATE LISTENER ---------- */
-  auth.onAuthStateChanged(user=>{
-    if(user){
-      document.getElementById('loginBtn').style.display='none';
-      document.getElementById('registerBtn').style.display='none';
-      document.getElementById('userInfo').style.display='inline';
-    }else{
-      document.getElementById('loginBtn').style.display='inline';
-      document.getElementById('registerBtn').style.display='inline';
-      document.getElementById('userInfo').style.display='none';
-    }
+}
+async function getAll(store){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const q = db.transaction(store,'readonly').objectStore(store).getAll();
+    q.onsuccess = () => res(q.result);
+    q.onerror   = () => rej(q.error);
   });
-
-  /* ---------- 8.  START ---------- */
-  home();
+}
+async function del(store,id){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const q = db.transaction(store,'readwrite').objectStore(store).delete(id);
+    q.onsuccess = res;
+    q.onerror   = () => rej(q.error);
+  });
 }
 
-init(); // запускаем всё
+/* ---------- 3.  MODE & AUTH ---------- */
+let mode = 'login';
+
+function loginForm() {
+  mode = 'login';
+  document.getElementById('authTitle').textContent = 'Вход';
+  document.getElementById('name').style.display = 'none';
+  document.getElementById('authModal').style.display = 'flex';
+}
+function registerForm() {
+  mode = 'register';
+  document.getElementById('authTitle').textContent = 'Регистрация';
+  document.getElementById('name').style.display = 'block';
+  document.getElementById('authModal').style.display = 'flex';
+}
+function closeAuth() {
+  document.getElementById('authModal').style.display = 'none';
+}
+async function submitAuth() {
+  const email = document.getElementById('email').value.trim();
+  const pwd   = document.getElementById('password').value;
+  const name  = document.getElementById('name').value.trim();
+  if (!email || !pwd) { alert('Заполните поля'); return; }
+  try {
+    if (mode === 'login') await auth.signInWithEmailAndPassword(email, pwd);
+    else {
+      await auth.createUserWithEmailAndPassword(email, pwd);
+      await db.collection('users').doc(auth.currentUser.uid).set({name, email, reg_date: new Date()});
+    }
+    closeAuth();
+  } catch (e) {
+    if (e.code === 'auth/email-already-in-use') {
+      alert('Email уже зарегистрирован. Попробуйте войти.');
+      loginForm();
+    } else {
+      alert(e.message);
+    }
+  }
+}
+function logout() { auth.signOut(); }
+
+/* ---------- 4.  TABS ---------- */
+const nav=document.querySelector('nav');
+const content=document.getElementById('content');
+nav.addEventListener('click',e=>{
+  if(!e.target.dataset.tab) return;
+  [...nav.children].forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  switch(e.target.dataset.tab){
+    case 'home':    home();break;
+    case 'expenses':expenses();break;
+    case 'incomes': incomes();break;
+    case 'work':    work();break;
+  }
+});
+
+/* ---------- 5.  TABS FUNCS ---------- */
+async function home(){
+  const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
+  const incCats={},expCats={};
+  inc.forEach(r=>incCats[r.category]=(incCats[r.category]||0)+r.amount);
+  exp.forEach(r=>expCats[r.category]=(expCats[r.category]||0)+r.amount);
+  const totalInc=Object.values(incCats).reduce((a,b)=>a+b,0);
+  const totalExp=Object.values(expCats).reduce((a,b)=>a+b,0);
+  content.innerHTML=`
+  <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
+  <section><h2>Доходы по категориям</h2><ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>
+  <section><h2>Расходы по категориям</h2><ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>`;
+  new Chart(document.getElementById('pie'), {
+    type: 'pie',
+    data: {
+      labels: ['Доходы', 'Расходы'],
+      datasets: [{
+        data: [totalInc, totalExp],
+        backgroundColor: ['#28a745', '#dc3545']
+      }]
+    }
+  });
+}
+async function expenses(){
+  content.innerHTML=`
+  <section>
+    <h2>Добавить расход</h2>
+    <form id="expForm">
+      <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
+      <input name="date" type="date" required>
+      <input name="target" placeholder="Куда" required>
+      <select name="category"><option>Супермаркеты</option><option>Развлечения</option></select>
+      <button>Добавить</button>
+    </form>
+  </section>
+  <section><ul id="expList"></ul></section>`;
+  const form=document.getElementById('expForm');
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(form);
+    await add('expenses',{amount:+fd.get('amount'),date:fd.get('date'),target:fd.get('target'),category:fd.get('category')});
+    form.reset();
+    expenses();
+  });
+  const list=document.getElementById('expList');
+  const items=await getAll('expenses');
+  list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.target} (${r.date}) <button onclick="del('expenses',${r.id}).then(expenses)">✖</button></li>`).join('');
+}
+async function incomes(){
+  content.innerHTML=`
+  <section>
+    <h2>Добавить доход</h2>
+    <form id="incForm">
+      <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
+      <input name="date" type="date" required>
+      <input name="source" placeholder="Источник" required>
+      <select name="category"><option>Зарплата</option><option>Пособие</option></select>
+      <button>Добавить</button>
+    </form>
+  </section>
+  <section><ul id="incList"></ul></section>`;
+  const form=document.getElementById('incForm');
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(form);
+    await add('incomes',{amount:+fd.get('amount'),date:fd.get('date'),source:fd.get('source'),category:fd.get('category')});
+    form.reset();
+    incomes();
+  });
+  const list=document.getElementById('incList');
+  const items=await getAll('incomes');
+  list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.source} (${r.date}) <button onclick="del('incomes',${r.id}).then(incomes)">✖</button></li>`).join('');
+}
+function work(){ content.innerHTML='<section><h2>Работа</h2><p>Раздел пока пуст</p></section>'; }
+
+/* ---------- 6.  ATTACH HANDLERS ---------- */
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('loginBtn').addEventListener('click',loginForm);
+  document.getElementById('registerBtn').addEventListener('click',registerForm);
+  document.getElementById('logoutBtn').addEventListener('click',logout);
+  document.getElementById('submitAuthBtn').addEventListener('click',submitAuth);
+  document.getElementById('closeAuthBtn').addEventListener('click',closeAuth);
+});
+
+/* ---------- 7.  AUTH STATE LISTENER ---------- */
+auth.onAuthStateChanged(user=>{
+  if(user){
+    document.getElementById('loginBtn').style.display='none';
+    document.getElementById('registerBtn').style.display='none';
+    document.getElementById('userInfo').style.display='inline';
+  }else{
+    document.getElementById('loginBtn').style.display='inline';
+    document.getElementById('registerBtn').style.display='inline';
+    document.getElementById('userInfo').style.display='none';
+  }
+});
+
+/* ---------- 8.  START ---------- */
+home();
 </script>
 </body>
 </html>
-
