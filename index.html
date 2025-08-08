@@ -74,6 +74,17 @@
 </div>
 
 <script type="module">
+await auth.createUserWithEmailAndPassword(email, password)
+  .catch((e) => {
+    if (e.code === 'auth/email-already-in-use') {
+      alert('Этот email уже зарегистрирован. Попробуйте войти.');
+      // Перенаправляем на форму входа
+      loginForm();
+    } else {
+      alert(e.message);
+    }
+  });
+ 
  document.getElementById('logoutBtn').addEventListener('click', () => auth.signOut());
 /* ---------- 1.  FIREBASE CONFIG ---------- */
 const firebaseConfig = {
@@ -89,7 +100,13 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 /* ---------- 2.  MODE & AUTH ---------- */
-let mode = 'login';
+if (confirm('Email уже используется. Выслать сброс пароля?')) {
+  await auth.sendPasswordResetEmail(email);
+  alert('Письмо отправлено!');
+}
+ 
+ 
+ let mode = 'login';
 
 function loginForm() {
   mode = 'login';
@@ -97,6 +114,16 @@ function loginForm() {
   document.getElementById('name').style.display = 'none';
   document.getElementById('authModal').style.display = 'flex';
 }
+
+import { fetchSignInMethodsForEmail } from "firebase/auth";
+
+const methods = await fetchSignInMethodsForEmail(auth, email);
+if (methods.length > 0) {
+  alert('Этот email уже зарегистрирован. Попробуйте войти.');
+} else {
+  // Регистрируем нового пользователя
+}
+ 
 function registerForm() {
   mode = 'register';
   document.getElementById('authTitle').textContent = 'Регистрация';
@@ -271,5 +298,6 @@ home();
 </script>
 </body>
 </html>
+
 
 
