@@ -23,9 +23,9 @@
  }
  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
  body{background:var(--bg);color:var(--text);transition:.2s}
- nav,.sub{display:flex;background:var(--card);border-bottom:1px solid var(--border)}
- nav button,.sub button{flex:1;padding:14px;border:none;background:none;cursor:pointer;font-weight:600}
- nav button.active,.sub button.active{color:var(--accent);border-bottom:2px solid var(--accent)}
+ nav{display:flex;background:var(--card);border-bottom:1px solid var(--border)}
+ nav button{flex:1;padding:14px;border:none;background:none;cursor:pointer;font-weight:600}
+ nav button.active{color:var(--accent);border-bottom:2px solid var(--accent)}
  main{padding:20px;max-width:800px;margin:auto}
  section{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:20px}
  form{display:grid;gap:12px}
@@ -40,14 +40,9 @@
  .tag-red{background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
  .tag-yellow{background:var(--warning);color:#000;padding:2px 6px;border-radius:4px;font-size:.7rem}
  .tag-green{background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
- .theme-btn{margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer}
- .cloud-btn{margin-left:8px}
+ #authModal{position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;display:none;align-items:center;justify-content:center;z-index:9999}
+ #authModal>div{background:#fff;border-radius:8px;padding:20px;width:300px}
 </style>
-<!-- Firebase Auth -->
-<!-- keep only these three -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -57,7 +52,6 @@
   <button type="button" data-tab="incomes">Доходы</button>
   <button type="button" data-tab="work">Работа</button>
 
-  <!-- ✅ кнопки без onclick -->
   <span>
     <button type="button" id="loginBtn">Войти</button>
     <button type="button" id="registerBtn">Регистрация</button>
@@ -66,635 +60,17 @@
     </span>
   </span>
 </nav>
- 
+
 <main id="content"></main>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-<script type="module">
-
-/* === Глобальные обработчики === */
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('loginBtn').addEventListener('click', loginForm);
-  document.getElementById('registerBtn').addEventListener('click', registerForm);
-  document.getElementById('logoutBtn').addEventListener('click', logout);
-});
- 
-/* ==========================================================
-   0.  GLOBAL VARS
-========================================================== */
-let hasSub = false;
-let currentUser = null;
-
-/* ==========================================================
-   1.  FIREBASE CONFIG  (PUT YOUR OWN!)
-========================================================== */
-const firebaseConfig = {
-  apiKey: "AIzaSyAVHxqN7PNgZRpon88Wa_UrF2D2UXufj0Y",
-  authDomain: "JobCount.firebaseapp.com",
-  projectId: "JobCount-17cd5",
-  storageBucket: "JobCount.appspot.com",
-  messagingSenderId: "322280447472",
-  appId: "1:123:web:abc"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
-
-/* ==========================================================
-   2.  SUBSCRIPTION CHECK
-========================================================== */
-async function checkSubscription() {
-  if (!currentUser) return;
-  const snap = await db.collection('users').doc(currentUser.uid).get();
-  const data = snap.data();
-  const sub = data?.sub_until?.toDate();
-  hasSub = sub && sub > new Date();
-  if (!hasSub) {
-    alert("Для полного доступа нужна активная подписка. Перейдите в личный кабинет.");
-  }
-}
-
-/* ==========================================================
-   3.  AUTH UI HELPERS
-========================================================== */
-function loginForm() {
-  document.getElementById('authTitle').textContent = 'Вход';
-  document.getElementById('name').style.display = 'none';
-  document.getElementById('authModal').style.display = 'block';
-  mode = 'login';
-}
-function registerForm() {
-  document.getElementById('authTitle').textContent = 'Регистрация';
-  document.getElementById('name').style.display = 'inline';
-  document.getElementById('authModal').style.display = 'block';
-  mode = 'register';
-}
-function closeAuth() {
-  document.getElementById('authModal').style.display = 'none';
-}
-let mode = 'login';
-async function submitAuth() {
-  const email = document.getElementById('email').value;
-  const pwd = document.getElementById('password').value;
-  const name = document.getElementById('name').value;
-  try {
-    if (mode === 'login') {
-      await auth.signInWithEmailAndPassword(email, pwd);
-    } else {
-      await auth.createUserWithEmailAndPassword(email, pwd);
-      await db.collection('users').doc(auth.currentUser.uid).set({
-        name,
-        email,
-        reg_date: new Date(),
-        sub_until: null,
-        first_sub: null,
-        sub_buys: 0
-      });
-    }
-    closeAuth();
-  } catch (e) {
-    alert(e.message);
-  }
-}
-function logout() {
-  auth.signOut();
-}
-
-/* ==========================================================
-   4.  INDEXEDDB HELPERS
-========================================================== */
-const DB_NAME = 'finance', DB_VER = 2;
-function openDB() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open(DB_NAME, DB_VER);
-    r.onerror = () => rej(r.error);
-    r.onsuccess = () => res(r.result);
-    r.onupgradeneeded = () => {
-      const db = r.result;
-      ['expenses', 'incomes', 'positions', 'worklog'].forEach(s => {
-        if (!db.objectStoreNames.contains(s))
-          db.createObjectStore(s, { keyPath: 'id', autoIncrement: true });
-      });
-    };
-  });
-}
-async function add(store, o) {
-  if (!hasSub) { alert('Для добавления данных нужна активная подписка.'); return; }
-  o.owner = currentUser?.uid || null;
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const q = db.transaction(store, 'readwrite').objectStore(store).add(o);
-    q.onsuccess = () => res(q.result);
-    q.onerror = () => rej(q.error);
-  });
-}
-async function put(store, o) {
-  if (!hasSub) { alert('Для изменения данных нужна активная подписка.'); return; }
-  o.owner = currentUser?.uid || null;
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const q = db.transaction(store, 'readwrite').objectStore(store).put(o);
-    q.onsuccess = () => res(q.result);
-    q.onerror = () => rej(q.error);
-  });
-}
-async function getAll(store) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const q = db.transaction(store, 'readonly').objectStore(store).getAll();
-    q.onsuccess = () => res(q.result);
-    q.onerror = () => rej(q.error);
-  });
-}
-async function del(store, id) {
-  if (!hasSub) { alert('Для удаления данных нужна активная подписка.'); return; }
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const q = db.transaction(store, 'readwrite').objectStore(store).delete(id);
-    q.onsuccess = res;
-    q.onerror = () => rej(q.error);
-  });
-}
-
-/* ==========================================================
-   5.  CHART.JS HELPERS
-========================================================== */
-import Chart from 'https://cdn.jsdelivr.net/npm/chart.js@4/auto/+esm';
-function pie(ctx, lbl, data) {
-  new Chart(ctx, {
-    type: 'pie',
-    data: { labels: lbl, datasets: [{ data, backgroundColor: ['#28a745', '#dc3545'] }] },
-    options: { responsive: true, maintainAspectRatio: false }
-  });
-}
-function bar(ctx, lbl, data) {
-  new Chart(ctx, {
-    type: 'bar',
-    data: { labels: lbl, datasets: [{ label: '₽', data, backgroundColor: '#007bff' }] },
-    options: { responsive: true, maintainAspectRatio: false }
-  });
-}
-
-/* ==========================================================
-   6.  THEME TOGGLE
-========================================================== */
-const themeToggle = document.getElementById('themeToggle');
-if (themeToggle) {
-  themeToggle.addEventListener('click', () => {
-    const dark = document.documentElement.dataset.theme === 'dark';
-    document.documentElement.dataset.theme = dark ? 'light' : 'dark';
-    themeToggle.textContent = dark ? '🌙' : '☀️';
-    localStorage.setItem('theme', document.documentElement.dataset.theme);
-  });
-  document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light';
-  themeToggle.textContent = document.documentElement.dataset.theme === 'dark' ? '☀️' : '🌙';
-}
-
-/* ==========================================================
-   7.  CLOUD SYNC BUTTON
-========================================================== */
-let syncEnabled = false;
-const syncBtn = document.getElementById('syncToggle');
-if (syncBtn) {
-  syncBtn.addEventListener('click', async () => {
-    syncEnabled = !syncEnabled;
-    syncBtn.style.color = syncEnabled ? 'var(--accent)' : '';
-    if (!syncEnabled) return;
-    const tables = ['expenses', 'incomes', 'positions', 'worklog'];
-    for (const t of tables) {
-      const local = await getAll(t);
-      for (const r of local) {
-        await db.collection(t).doc(r.id.toString()).set({ ...r, owner: currentUser?.uid || null });
-      }
-    }
-    alert('Данные отправлены в облако!');
-  });
-}
-
-/* ==========================================================
-   8.  ROUTER & TAB RENDERING
-========================================================== */
-const nav = document.querySelector('nav');
-const content = document.getElementById('content');
-nav.addEventListener('click', e => {
-  if (!e.target.dataset.tab) return;
-  [...nav.children].forEach(b => b.classList.remove('active'));
-  e.target.classList.add('active');
-  render(e.target.dataset.tab);
-});
-window.render = function (tab) {
-  tabs[tab](content);
-};
-
-/* ==========================================================
-   9.  TAB DEFINITIONS
-========================================================== */
-const tabs = {
-  async home(root) {
-    const [inc, exp] = await Promise.all([getAll('incomes'), getAll('expenses')]);
-    const incCats = {}, expCats = {};
-    inc.forEach(r => incCats[r.category] = (incCats[r.category] || 0) + r.amount);
-    exp.forEach(r => expCats[r.category] = (expCats[r.category] || 0) + r.amount);
-
-    root.innerHTML = `
-      <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
-      <section><h2>Доходы по категориям</h2>
-        <ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li><span class="tag-${rColor(c)}"></span>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul>
-      </section>
-      <section><h2>Расходы по категориям</h2>
-        <ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li><span class="tag-${rColor(c)}"></span>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul>
-      </section>
-
-      <section>
-        <h2>Накопления по дням</h2>
-        <canvas id="balanceChart"></canvas>
-      </section>
-
-      <section>
-        <h2>Фильтр по дате</h2>
-        <div class="filter-bar">
-          <button data-filter="today">Сегодня</button>
-          <button data-filter="week">Неделя</button>
-          <button data-filter="month">Месяц</button>
-        </div>
-        <input type="text" id="searchInput" placeholder="Поиск…" class="search-box">
-        <ul id="homeList"></ul>
-      </section>`;
-
-    const totalInc = Object.values(incCats).reduce((a, b) => a + b, 0);
-    const totalExp = Object.values(expCats).reduce((a, b) => a + b, 0);
-    pie(document.getElementById('pie'), ['Доходы', 'Расходы'], [totalInc, totalExp]);
-    drawBalanceChart(inc, exp);
-    drawHomeList(inc.concat(exp.map(e => ({ ...e, type: 'expenses' }))));
-  },
-
-  async expenses(root) {
-    root.innerHTML = `
-      <section>
-        <h2>Добавить расход</h2>
-        <form id="expForm">
-          <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
-          <input name="date" type="date" required>
-          <input name="target" placeholder="Куда потрачено" required>
-          <select name="category">
-            <option value="Супермаркеты">Супермаркеты</option>
-            <option value="Развлечения">Развлечения</option>
-            <option value="Транспорт">Транспорт</option>
-            <option value="Такси">Такси</option>
-            <option value="Маркетплейсы">Маркетплейсы</option>
-            <option value="Долги">Долги</option>
-            <option value="custom">Своя категория…</option>
-          </select>
-          <input name="custom" placeholder="Своя категория" style="display:none">
-          <select name="color">
-            <option value="green">🟢</option>
-            <option value="yellow">🟡</option>
-            <option value="red">🔴</option>
-          </select>
-          <button>Добавить</button>
-        </form>
-      </section>
-      <section>
-        <div class="filter-bar">
-          <button data-filter="today">Сегодня</button>
-          <button data-filter="week">Неделя</button>
-          <button data-filter="month">Месяц</button>
-        </div>
-        <input type="text" id="expSearch" placeholder="Поиск…" class="search-box">
-        <ul id="expList"></ul>
-      </section>`;
-    await renderList(root, 'expenses', '#expForm', '#expList', '#expSearch');
-  },
-
-  async incomes(root) {
-    root.innerHTML = `
-      <section>
-        <h2>Добавить доход</h2>
-        <form id="incForm">
-          <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
-          <input name="date" type="date" required>
-          <input name="source" placeholder="Источник" required>
-          <select name="category">
-            <option value="Пособие">Пособие</option>
-            <option value="Зарплата">Зарплата</option>
-            <option value="Помощь">Помощь</option>
-            <option value="Другое">Другое</option>
-            <option value="custom">Своя категория…</option>
-          </select>
-          <input name="custom" placeholder="Своя категория" style="display:none">
-          <select name="color">
-            <option value="green">🟢</option>
-            <option value="yellow">🟡</option>
-            <option value="red">🔴</option>
-          </select>
-          <button>Добавить</button>
-        </form>
-      </section>
-      <section>
-        <div class="filter-bar">
-          <button data-filter="today">Сегодня</button>
-          <button data-filter="week">Неделя</button>
-          <button data-filter="month">Месяц</button>
-        </div>
-        <input type="text" id="incSearch" placeholder="Поиск…" class="search-box">
-        <ul id="incList"></ul>
-      </section>`;
-    await renderList(root, 'incomes', '#incForm', '#incList', '#incSearch');
-  },
-
-  work(root) {
-    root.innerHTML = `
-      <nav class="sub">
-        <button data-sub="positions" class="active">Позиции</button>
-        <button data-sub="log">Выработка</button>
-        <button data-sub="stats">Статистика</button>
-      </nav>
-      <div id="workRoot"></div>`;
-    const sub = root.querySelector('.sub');
-    const wr = root.querySelector('#workRoot');
-    sub.addEventListener('click', e => {
-      if (!e.target.dataset.sub) return;
-      [...sub.children].forEach(b => b.classList.remove('active'));
-      e.target.classList.add('active');
-      ({ positions, log, stats }[e.target.dataset.sub])(wr);
-    });
-    positions(wr);
-  }
-};
-
-/* ==========================================================
-   10.  UTILITY HELPERS
-========================================================== */
-function rColor(str) {
-  const h = str.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 3;
-  return ['green', 'yellow', 'red'][h];
-}
-function drawBalanceChart(inc, exp) {
-  const days = {};
-  inc.forEach(r => days[r.date] = (days[r.date] || 0) + r.amount);
-  exp.forEach(r => days[r.date] = (days[r.date] || 0) - r.amount);
-  const sortedDays = Object.keys(days).sort();
-  const running = sortedDays.reduce((a, d) => {
-    a.push((a.at(-1) || 0) + days[d]);
-    return a;
-  }, []);
-  bar(document.getElementById('balanceChart'), sortedDays, running);
-}
-function filterDate(records, type) {
-  const now = new Date();
-  return records.filter(r => {
-    const d = new Date(r.date);
-    if (type === 'today') return d.toDateString() === now.toDateString();
-    if (type === 'week') {
-      const weekAgo = new Date();
-      weekAgo.setDate(now.getDate() - 7);
-      return d >= weekAgo;
-    }
-    if (type === 'month') {
-      const monthAgo = new Date();
-      monthAgo.setMonth(now.getMonth() - 1);
-      return d >= monthAgo;
-    }
-    return true;
-  });
-}
-function drawHomeList(records) {
-  const list = document.getElementById('homeList');
-  const search = document.getElementById('searchInput');
-  const buttons = document.querySelectorAll('#home .filter-bar button');
-  const show = (recs = records) => {
-    const term = search.value.toLowerCase();
-    list.innerHTML = recs
-      .filter(r => JSON.stringify(r).toLowerCase().includes(term))
-      .map(r => `<li>${r.amount}₽ – ${r.target || r.source || ''} (${r.category}, ${r.date})
-        <button onclick="del('${r.type}',${r.id}).then(()=>location.reload())">✖</button></li>`)
-      .join('');
-  };
-  search.addEventListener('input', () => show());
-  buttons.forEach(btn =>
-    btn.addEventListener('click', () => show(filterDate(records, btn.dataset.filter)))
-  );
-  show();
-}
-async function renderList(root, store, formSel, listSel, searchSel) {
-  const form = root.querySelector(formSel);
-  const list = root.querySelector(listSel);
-  const search = root.querySelector(searchSel);
-  const buttons = root.querySelectorAll('.filter-bar button');
-  let records = await getAll(store);
-  const show = (recs = records) => {
-    const term = search.value.toLowerCase();
-    list.innerHTML = recs
-      .filter(r => JSON.stringify(r).toLowerCase().includes(term))
-      .map(r => `<li>${r.amount}₽ – ${r.target || r.source || ''} (${r.category}, ${r.date})
-        <button onclick="del('${store}',${r.id}).then(()=>location.reload())">✖</button></li>`)
-      .join('');
-  };
-  form.addEventListener('submit', async e => {
-    e.preventDefault();
-    const fd = new FormData(form);
-    const obj = {
-      amount: +fd.get('amount'),
-      date: fd.get('date'),
-      category: fd.get('category') === 'custom' ? fd.get('custom') : fd.get('category'),
-      color: fd.get('color') || 'green'
-    };
-    if (store === 'expenses') obj.target = fd.get('target');
-    else obj.source = fd.get('source');
-    await add(store, obj);
-    form.reset();
-    records = await getAll(store);
-    show();
-  });
-  search.addEventListener('input', () => show());
-  buttons.forEach(btn =>
-    btn.addEventListener('click', () => show(filterDate(records, btn.dataset.filter)))
-  );
-  show();
-}
-
-/* ==========================================================
-   11.  WORK SUB-SECTIONS
-========================================================== */
-async function positions(root) {
-  root.innerHTML = `
-    <section>
-      <h2>Добавить позицию</h2>
-      <form id="posForm">
-        <input name="name" placeholder="Название" required>
-        <input name="holes" type="number" step="0.01" placeholder="Отверстий на 1к" required>
-        <input name="sets"  type="number" step="0.01" placeholder="Комплектов" required>
-        <input name="price" type="number" step="0.01" placeholder="Цена за 1 отверстие (₽)" required>
-        <button>Добавить</button>
-      </form>
-    </section>
-    <section><h2>Позиции (А-Я)</h2><ul id="posList"></ul></section>`;
-  const form = root.querySelector('#posForm');
-  const list = root.querySelector('#posList');
-  form.addEventListener('submit', async e => {
-    e.preventDefault();
-    const { name, holes, sets, price } = form.elements;
-    await add('positions', {
-      name: name.value.trim(),
-      holes: +holes.value,
-      sets: +sets.value,
-      price: +price.value
-    });
-    form.reset();
-    refresh();
-  });
-  async function refresh() {
-    const items = await getAll('positions');
-    items.sort((a, b) => a.name.localeCompare(b.name));
-    list.innerHTML = items
-      .map(p => `<li>${p.name} | ${p.holes} отв/1к | ${p.sets} компл | ${p.price}₽/отв
-        <button onclick="del('positions',${p.id}).then(refresh)">✖</button></li>`)
-      .join('');
-  }
-  refresh();
-}
-async function log(root) {
-  const positions = await getAll('positions');
-  root.innerHTML = `
-    <section><h2>Заработок ${new Date().getFullYear()}</h2><canvas id="bar"></canvas></section>
-    <section>
-      <h2>Добавить выработку</h2>
-      <input type="date" id="date" required>
-      <div id="addForm" style="display:none; flex-direction:column; gap:8px;">
-        <select id="posSelect">${positions.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
-        <input id="sets" type="number" step="0.01" placeholder="Комплектов" min="0.01">
-        <input id="price" type="number" step="0.01" placeholder="Цена за 1 отверстие (₽)" min="0.01">
-        <button id="saveBtn">Сохранить</button>
-      </div>
-      <ul id="dayList"></ul>
-      <p id="dayTotal"></p>
-    </section>`;
-  const dateSel = root.querySelector('#date');
-  const formDiv = root.querySelector('#addForm');
-  const posSel = root.querySelector('#posSelect');
-  const setsInp = root.querySelector('#sets');
-  const priceInp = root.querySelector('#price');
-  const saveBtn = root.querySelector('#saveBtn');
-  const dayList = root.querySelector('#dayList');
-  const dayTotal = root.querySelector('#dayTotal');
-  dateSel.addEventListener('change', loadDay);
-  saveBtn.addEventListener('click', async () => {
-    const posId = +posSel.value;
-    const sets = +setsInp.value;
-    const price = +priceInp.value;
-    if (!sets || !price) { alert('Введите корректные числа'); return; }
-    const pos = positions.find(p => p.id === posId);
-    const earned = (pos.holes * sets * price).toFixed(2);
-    await add('worklog', { posId, sets, price, date: dateSel.value, earned: +earned });
-    loadDay();
-    refreshBar();
-  });
-  async function loadDay() {
-    const d = dateSel.value;
-    const logs = await getAll('worklog');
-    const filtered = logs.filter(l => l.date === d);
-    dayList.innerHTML = filtered
-      .map(l => {
-        const p = positions.find(p => p.id === l.posId);
-        return `<li>${p.name} | ${p.holes * l.sets} отв | ${l.sets} компл | ${l.price}₽/отв | ${l.earned}₽ итого
-          <button onclick="del('worklog',${l.id}).then(loadDay)">✖</button></li>`;
-      })
-      .join('');
-    const totalEarned = filtered.reduce((a, b) => a + b.earned, 0).toFixed(2);
-    const totalSets = filtered.reduce((a, b) => a + b.sets, 0);
-    const totalHoles = filtered.reduce((a, b) => {
-      const p = positions.find(p => p.id === b.posId);
-      return a + p.holes * b.sets;
-    }, 0);
-    dayTotal.textContent = `Итого: ${totalHoles} отв, ${totalSets} компл, ${totalEarned}₽`;
-    formDiv.style.display = 'block';
-  }
-  async function refreshBar() {
-    const logs = await getAll('worklog');
-    const byMonth = Array(12).fill(0);
-    logs.forEach(l => {
-      const m = new Date(l.date).getMonth();
-      byMonth[m] += l.earned;
-    });
-    bar(root.querySelector('#bar'), ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'], byMonth);
-  }
-  refreshBar();
-}
-async function stats(root) {
-  const positions = await getAll('positions');
-  root.innerHTML = `
-    <section>
-      <h2>Статистика за месяц</h2>
-      <label>Месяц
-        <select id="monthSel">${Array.from({ length: 12 }, (_, m) => `<option value="${m}">${new Date(0, m).toLocaleString('ru', { month: 'long' })}</option>`).join('')}</select>
-      </label>
-      <label>Год
-        <select id="yearSel">${Array.from({ length: 11 }, (_, i) => 2020 + i).map(y => `<option value="${y}" ${y === new Date().getFullYear() ? 'selected' : ''}>${y}</option>`).join('')}</select>
-      </label>
-      <ul id="statsList"></ul>
-    </section>`;
-  const monthSel = root.querySelector('#monthSel');
-  const yearSel = root.querySelector('#yearSel');
-  const list = root.querySelector('#statsList');
-  [monthSel, yearSel].forEach(sel => sel.addEventListener('change', refresh));
-  refresh();
-  async function refresh() {
-    const month = +monthSel.value;
-    const year = +yearSel.value;
-    const logs = await getAll('worklog');
-    const filtered = logs.filter(l => {
-      const d = new Date(l.date);
-      return d.getMonth() === month && d.getFullYear() === year;
-    });
-    const map = new Map();
-    filtered.forEach(l => {
-      const name = positions.find(p => p.id === l.posId)?.name || '—';
-      const cur = map.get(name) || { count: 0, sets: 0 };
-      cur.count += 1;
-      cur.sets += l.sets;
-      map.set(name, cur);
-    });
-    list.innerHTML = [...map.entries()].map(([name, { count, sets }]) => `<li>${name} – ${count} раз – ${sets} компл.</li>`).join('');
-  }
-}
-
-/* ==========================================================
-   12.  FIREBASE AUTH STATE LISTENER
-========================================================== */
-auth.onAuthStateChanged(async user => {
-  currentUser = user;
-  if (user) {
-    document.getElementById('loginBtn').style.display = 'none';
-    document.getElementById('registerBtn').style.display = 'none';
-    document.getElementById('userInfo').style.display = 'inline';
-    await checkSubscription();
-  } else {
-    document.getElementById('loginBtn').style.display = 'inline';
-    document.getElementById('registerBtn').style.display = 'inline';
-    document.getElementById('userInfo').style.display = 'none';
-  }
-});
-
-/* ==========================================================
-   13.  INITIAL RENDER
-========================================================== */
- /* === навешиваем обработчики после загрузки DOM === */
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('loginBtn').addEventListener('click', loginForm);
-  document.getElementById('registerBtn').addEventListener('click', registerForm);
-  document.getElementById('logoutBtn').addEventListener('click', logout);
-  document.getElementById('submitAuthBtn').addEventListener('click', submitAuth);
-  document.getElementById('closeAuthBtn').addEventListener('click', closeAuth);
-});
-render('home');
-</script>
-<!-- 🔐 Модальное окно -->
- <!-- ONE modal only -->
-<div id="authModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
-  <div style="background:#fff;border-radius:8px;padding:20px;width:300px">
+<!-- Modal -->
+<div id="authModal">
+  <div>
     <h3 id="authTitle">Вход</h3>
     <input id="email" placeholder="Email" type="email"><br>
     <input id="password" placeholder="Пароль" type="password"><br>
@@ -703,22 +79,200 @@ render('home');
     <button id="closeAuthBtn">Закрыть</button>
   </div>
 </div>
-<div id="authModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:#0005; z-index:9999">
-  <div style="background:white; margin:10% auto; padding:20px; width:300px; border-radius:8px">
-    <h3 id="authTitle">Вход</h3>
-    <input id="email" placeholder="Email" type="email"><br>
-    <input id="password" placeholder="Пароль" type="password"><br>
-    <input id="name" placeholder="Имя (по желанию)" style="display:none"><br>
-    <button onclick="submitAuth()">Отправить</button>
-    <button onclick="closeAuth()">Закрыть</button>
-  </div>
-</div>
+
+<script type="module">
+/* ---------- 1.  FIREBASE CONFIG ---------- */
+const firebaseConfig = {
+  apiKey: "YOUR-API-KEY",
+  authDomain: "YOUR-PROJECT.firebaseapp.com",
+  projectId: "YOUR-PROJECT",
+  storageBucket: "YOUR-PROJECT.appspot.com",
+  messagingSenderId: "123",
+  appId: "1:123:web:abc"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ---------- 2.  MODE & AUTH ---------- */
+let mode = 'login';
+
+function loginForm() {
+  mode = 'login';
+  document.getElementById('authTitle').textContent = 'Вход';
+  document.getElementById('name').style.display = 'none';
+  document.getElementById('authModal').style.display = 'flex';
+}
+function registerForm() {
+  mode = 'register';
+  document.getElementById('authTitle').textContent = 'Регистрация';
+  document.getElementById('name').style.display = 'block';
+  document.getElementById('authModal').style.display = 'flex';
+}
+function closeAuth() {
+  document.getElementById('authModal').style.display = 'none';
+}
+async function submitAuth() {
+  const email = document.getElementById('email').value;
+  const pwd = document.getElementById('password').value;
+  const name = document.getElementById('name').value;
+  try {
+    if (mode === 'login') await auth.signInWithEmailAndPassword(email, pwd);
+    else {
+      await auth.createUserWithEmailAndPassword(email, pwd);
+      await db.collection('users').doc(auth.currentUser.uid).set({name, email, reg_date: new Date()});
+    }
+    closeAuth();
+  } catch (e) { alert(e.message); }
+}
+function logout() { auth.signOut(); }
+
+/* ---------- 3.  INDEXEDDB ---------- */
+const DB_NAME = 'finance', DB_VER = 2;
+async function openDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onerror = () => rej(r.error);
+    r.onsuccess = () => res(r.result);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      ['expenses','incomes','positions','worklog'].forEach(s => {
+        if (!db.objectStoreNames.contains(s))
+          db.createObjectStore(s,{keyPath:'id',autoIncrement:true});
+      });
+    };
+  });
+}
+async function add(store,o){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const q = db.transaction(store,'readwrite').objectStore(store).add(o);
+    q.onsuccess = () => res(q.result);
+    q.onerror   = () => rej(q.error);
+  });
+}
+async function getAll(store){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const q = db.transaction(store,'readonly').objectStore(store).getAll();
+    q.onsuccess = () => res(q.result);
+    q.onerror   = () => rej(q.error);
+  });
+}
+async function del(store,id){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const q = db.transaction(store,'readwrite').objectStore(store).delete(id);
+    q.onsuccess = res;
+    q.onerror   = () => rej(q.error);
+  });
+}
+
+/* ---------- 4.  TABS ---------- */
+const nav=document.querySelector('nav');
+const content=document.getElementById('content');
+nav.addEventListener('click',e=>{
+  if(!e.target.dataset.tab) return;
+  [...nav.children].forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  switch(e.target.dataset.tab){
+    case 'home':    home();break;
+    case 'expenses':expenses();break;
+    case 'incomes': incomes();break;
+    case 'work':    work();break;
+  }
+});
+
+/* ---------- 5.  TABS FUNCS ---------- */
+async function home(){
+  const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
+  const incCats={},expCats={};
+  inc.forEach(r=>incCats[r.category]=(incCats[r.category]||0)+r.amount);
+  exp.forEach(r=>expCats[r.category]=(expCats[r.category]||0)+r.amount);
+  const totalInc=Object.values(incCats).reduce((a,b)=>a+b,0);
+  const totalExp=Object.values(expCats).reduce((a,b)=>a+b,0);
+  content.innerHTML=`
+  <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
+  <section><h2>Доходы по категориям</h2><ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>
+  <section><h2>Расходы по категориям</h2><ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>`;
+  new Chart(document.getElementById('pie'),{type:'pie',data:{labels:['Доходы','Расходы'],datasets:[{data:[totalInc,totalExp],backgroundColor:['#28a745','#dc3545']}]}});
+}
+async function expenses(){
+  content.innerHTML=`
+  <section>
+    <h2>Добавить расход</h2>
+    <form id="expForm">
+      <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
+      <input name="date" type="date" required>
+      <input name="target" placeholder="Куда" required>
+      <select name="category"><option>Супермаркеты</option><option>Развлечения</option></select>
+      <button>Добавить</button>
+    </form>
+  </section>
+  <section><ul id="expList"></ul></section>`;
+  const form=document.getElementById('expForm');
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(form);
+    await add('expenses',{amount:+fd.get('amount'),date:fd.get('date'),target:fd.get('target'),category:fd.get('category')});
+    form.reset();
+    expenses();
+  });
+  const list=document.getElementById('expList');
+  const items=await getAll('expenses');
+  list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.target} (${r.date}) <button onclick="del('expenses',${r.id}).then(expenses)">✖</button></li>`).join('');
+}
+async function incomes(){
+  content.innerHTML=`
+  <section>
+    <h2>Добавить доход</h2>
+    <form id="incForm">
+      <input name="amount" type="number" step="0.01" placeholder="Сумма" required>
+      <input name="date" type="date" required>
+      <input name="source" placeholder="Источник" required>
+      <select name="category"><option>Зарплата</option><option>Пособие</option></select>
+      <button>Добавить</button>
+    </form>
+  </section>
+  <section><ul id="incList"></ul></section>`;
+  const form=document.getElementById('incForm');
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(form);
+    await add('incomes',{amount:+fd.get('amount'),date:fd.get('date'),source:fd.get('source'),category:fd.get('category')});
+    form.reset();
+    incomes();
+  });
+  const list=document.getElementById('incList');
+  const items=await getAll('incomes');
+  list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.source} (${r.date}) <button onclick="del('incomes',${r.id}).then(incomes)">✖</button></li>`).join('');
+}
+function work(){ content.innerHTML='<section><h2>Работа</h2><p>Раздел пока пуст</p></section>'; }
+
+/* ---------- 6.  ATTACH HANDLERS ---------- */
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('loginBtn').addEventListener('click',loginForm);
+  document.getElementById('registerBtn').addEventListener('click',registerForm);
+  document.getElementById('logoutBtn').addEventListener('click',logout);
+  document.getElementById('submitAuthBtn').addEventListener('click',submitAuth);
+  document.getElementById('closeAuthBtn').addEventListener('click',closeAuth);
+});
+
+/* ---------- 7.  AUTH STATE LISTENER ---------- */
+auth.onAuthStateChanged(user=>{
+  if(user){
+    document.getElementById('loginBtn').style.display='none';
+    document.getElementById('registerBtn').style.display='none';
+    document.getElementById('userInfo').style.display='inline';
+  }else{
+    document.getElementById('loginBtn').style.display='inline';
+    document.getElementById('registerBtn').style.display='inline';
+    document.getElementById('userInfo').style.display='none';
+  }
+});
+
+/* ---------- 8.  START ---------- */
+home();
+</script>
 </body>
 </html>
-
-
-
-
-
-
-
