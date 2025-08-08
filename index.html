@@ -114,6 +114,26 @@ async function del(store,id){
 }
 
 /* ---------- 3.  MODE & AUTH ---------- */
+
+ try {
+  await auth.signInWithEmailAndPassword(email, pwd);
+  closeAuth();
+} catch (e) {
+  switch (e.code) {
+    case 'auth/user-not-found':
+      alert('Email не зарегистрирован.');
+      break;
+    case 'auth/wrong-password':
+      alert('Неверный пароль.');
+      break;
+    case 'auth/invalid-email':
+      alert('Неверный формат email.');
+      break;
+    default:
+      alert(e.message);
+  }
+}
+ 
 let mode = 'login';
 
 function loginForm() {
@@ -271,3 +291,4 @@ home();
 </script>
 </body>
 </html>
+
