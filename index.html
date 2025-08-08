@@ -19,6 +19,8 @@
  button[type=submit]{background:var(--accent);color:#fff;cursor:pointer}
  ul{list-style:none}li{padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
  canvas{width:100%!important;height:300px!important}
+ .tag-green{background:#28a745;color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
+ .tag-red{background:#dc3545;color:#fff;padding:2px 6px;border-radius:4px;font-size:.7rem}
 </style>
 </head>
 <body>
@@ -28,10 +30,13 @@
   <button type="button" data-tab="expenses">Расходы</button>
   <button type="button" data-tab="incomes">Доходы</button>
   <button type="button" data-tab="work">Работа</button>
+  <button type="button" data-tab="users" id="usersBtn" style="display:none">Пользователи</button>
+  <button type="button" data-tab="check" id="checkBtn" style="display:none">Проверка</button>
 
   <span>
     <button type="button" id="loginBtn">Войти</button>
     <button type="button" id="registerBtn">Регистрация</button>
+    <button type="button" id="profileBtn" style="display:none">Личный кабинет</button>
     <span id="userInfo" style="display:none">
       <button type="button" id="logoutBtn">Выйти</button>
       <span id="adminBadge" style="display:none; margin-left:6px; background:#dc3545; color:#fff; padding:2px 6px; border-radius:4px; font-size:.7rem;">Админ</span>
@@ -51,16 +56,37 @@
 <div id="authModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
   <div style="background:#fff;border-radius:8px;padding:20px;width:300px">
     <h3 id="authTitle">Вход</h3>
-    <input id="email" placeholder="Email" type="email" autocomplete="username"><br>
-    <input id="password" placeholder="Пароль" type="password" autocomplete="current-password"><br>
-    <input id="name" placeholder="Имя (по желанию)" style="display:none" autocomplete="name"><br>
+    <input id="email" placeholder="Email" type="email"><br>
+    <input id="password" placeholder="Пароль" type="password"><br>
+    <input id="name" placeholder="Имя (по желанию)" style="display:none"><br>
     <button id="submitAuthBtn">Отправить</button>
     <button id="closeAuthBtn">Закрыть</button>
   </div>
 </div>
 
+<!-- Оплата -->
+<div id="payModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
+  <div style="background:#fff;border-radius:8px;padding:20px;width:300px">
+    <h3>Оплата подписки</h3>
+    <p>Карта: 42412412848128481284</p>
+    <p>Код: <span id="payCode"></span></p>
+    <button id="paidBtn">Оплатил</button>
+    <button id="closePayBtn">Закрыть</button>
+  </div>
+</div>
+
+<!-- Промокод -->
+<div id="promoModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
+  <div style="background:#fff;border-radius:8px;padding:20px;width:300px">
+    <h3>Подарочный код</h3>
+    <input id="promoInput" placeholder="Введите код"><br>
+    <button id="applyPromoBtn">Применить</button>
+    <button id="closePromoBtn">Закрыть</button>
+  </div>
+</div>
+
 <script>
-/* ---------- 1.  FIREBASE CONFIG ---------- */
+/* ---------- 1.  FIREBASE ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyAVHxqN7PNgZRpon88Wa_UrF2D2UXufj0Y",
   authDomain: "jobcount-17cd5.firebaseapp.com",
@@ -71,7 +97,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const db   = firebase.firestore();
+const db = firebase.firestore();
 
 /* ---------- 2.  INDEXEDDB ---------- */
 const DB_NAME = 'finance', DB_VER = 2;
@@ -143,16 +169,13 @@ async function submitAuth() {
       await auth.signInWithEmailAndPassword(email, pwd);
     } else {
       await auth.createUserWithEmailAndPassword(email, pwd);
-      await db.collection('users').doc(auth.currentUser.uid).set({name, email, reg_date: new Date()});
+      await db.collection('users').doc(auth.currentUser.uid).set({
+        name, email, reg_date: new Date(), sub_until: null, sub_count: 0
+      });
     }
     closeAuth();
   } catch (e) {
-    switch (e.code) {
-      case 'auth/user-not-found': alert('Email не зарегистрирован.'); break;
-      case 'auth/wrong-password': alert('Неверный пароль.'); break;
-      case 'auth/email-already-in-use': alert('Email уже зарегистрирован. Попробуйте войти.'); break;
-      default: alert(e.message);
-    }
+    alert(e.message);
   }
 }
 function logout() { auth.signOut(); }
@@ -165,10 +188,12 @@ nav.addEventListener('click', e => {
   [...nav.children].forEach(b => b.classList.remove('active'));
   e.target.classList.add('active');
   switch (e.target.dataset.tab) {
-    case 'home':    home();    break;
-    case 'expenses':expenses();break;
+    case 'home':    home(); break;
+    case 'expenses':expenses(); break;
     case 'incomes': incomes(); break;
-    case 'work':    work();    break;
+    case 'work':    work(); break;
+    case 'users':   users(); break;
+    case 'check':   checkPayments(); break;
   }
 });
 
@@ -247,37 +272,176 @@ async function incomes(){
 }
 function work(){ content.innerHTML='<section><h2>Работа</h2><p>Раздел пока пуст</p></section>'; }
 
-/* ---------- 6.  HANDLERS ---------- */
+/* ---------- 6.  USERS / PROFILE ---------- */
+async function users(){
+  if (!isAdmin()) return;
+  const usersSnap = await db.collection('users').get();
+  let html = '<section><h2>Пользователи</h2><table border=1 cellspacing=0 cellpadding=4><tr><th>Email<th>Имя<th>До подписки<th>Действие</tr>';
+  usersSnap.forEach(doc=>{
+    const d = doc.data();
+    const active = d.sub_until && new Date() < d.sub_until.toDate();
+    html += `<tr class="${active?'tag-green':'tag-red'}">
+      <td>${d.email}<td>${d.name || ''}<td>${active?'Активна':'Нет'}<td>
+      <button onclick="activateSub('${doc.id}')">Оформить</button>
+    </tr>`;
+  });
+  html += '</table></section>';
+  content.innerHTML = html;
+}
+async function checkPayments(){
+  if (!isAdmin()) return;
+  const snap = await db.collection('payments').where('status','==','pending').get();
+  let html = '<section><h2>Проверка оплат</h2><table border=1 cellspacing=0 cellpadding=4><tr><th>Email<th>Код<th>Действие</tr>';
+  snap.forEach(doc=>{
+    const d = doc.data();
+    html += `<tr><td>${d.email}<td>${d.code}<td>
+      <button onclick="confirmPayment('${doc.id}')">Подтвердить</button>
+    </tr>`;
+  });
+  html += '</table></section>';
+  content.innerHTML = html;
+}
+async function activateSub(uid){
+  const now = new Date();
+  const end = new Date();
+  end.setMonth(end.getMonth()+1);
+  await db.collection('users').doc(uid).update({
+    sub_until: end,
+    sub_count: firebase.firestore.FieldValue.increment(1)
+  });
+  users();
+}
+async function confirmPayment(pid){
+  await db.collection('payments').doc(pid).update({status:'confirmed'});
+  const pay = await db.collection('payments').doc(pid).get();
+  await activateSub(pay.data().uid);
+  checkPayments();
+}
+
+/* ---------- 7.  PROFILE ---------- */
+async function profile(){
+  const user = auth.currentUser;
+  if(!user) return loginForm();
+  const doc = await db.collection('users').doc(user.uid).get();
+  const d = doc.data();
+  const now = new Date();
+  const active = d.sub_until && now < d.sub_until.toDate();
+  let html = `<section>
+    <h2>Личный кабинет</h2>
+    <p><b>Email:</b> ${d.email}</p>
+    <p><b>Имя:</b> ${d.name || ''}</p>
+    <p><b>Дата регистрации:</b> ${d.reg_date?.toDate().toLocaleDateString() || ''}</p>
+    <p><b>Подписка до:</b> ${d.sub_until?.toDate().toLocaleDateString() || 'Не активна'}</p>
+    <p><b>Кол-во подписок:</b> ${d.sub_count || 0}</p>
+    ${active ? '' : '<button id="buyBtn">Купить подписку (100₽)</button>'}
+    <input id="promoInput" placeholder="Подарочный код">
+    <button id="applyPromoBtn">Применить</button>
+    <br><button id="deleteProfileBtn">Удалить профиль</button>
+  </section>`;
+  content.innerHTML = html;
+  if(!active) document.getElementById('buyBtn').onclick = buySub;
+  document.getElementById('applyPromoBtn').onclick = applyPromo;
+  document.getElementById('deleteProfileBtn').onclick = deleteProfile;
+}
+
+/* ---------- 8.  SUBSCRIPTION ---------- */
+function buySub(){
+  const user = auth.currentUser;
+  const code = Math.floor(Math.random()*999999999)+1;
+  document.getElementById('payCode').textContent = code;
+  document.getElementById('payModal').style.display='flex';
+  document.getElementById('paidBtn').onclick = async () => {
+    await db.collection('payments').add({
+      uid: user.uid,
+      email: user.email,
+      code,
+      status: 'pending',
+      date: new Date()
+    });
+    document.getElementById('payModal').style.display='none';
+    alert('Запрос отправлен администратору.');
+  };
+}
+async function applyPromo(){
+  const user = auth.currentUser;
+  const code = document.getElementById('promoInput').value.trim();
+  if(!code) return alert('Введите код');
+  const snap = await db.collection('promos').where('code','==',code).get();
+  if(snap.empty) return alert('Код не найден');
+  const promo = snap.docs[0].data();
+  const now = new Date();
+  const end = new Date();
+  end.setMonth(end.getMonth()+promo.months);
+  await db.collection('users').doc(user.uid).update({
+    sub_until: end,
+    sub_count: firebase.firestore.FieldValue.increment(promo.months)
+  });
+  await db.collection('promos').doc(snap.docs[0].id).delete();
+  alert('Промокод активирован!');
+  profile();
+}
+async function deleteProfile(){
+  if(!confirm('Удалить профиль навсегда?')) return;
+  const user = auth.currentUser;
+  await db.collection('users').doc(user.uid).delete();
+  await user.delete();
+  logout();
+}
+
+/* ---------- 9.  PROMO ADMIN ---------- */
+async function promoAdmin(){
+  if(!isAdmin()) return;
+  const m = prompt('Кол-во месяцев:');
+  if(!m || isNaN(m)) return;
+  const code = [...Array(34)].map(()=> 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.charAt(Math.floor(Math.random()*36))).join('');
+  await db.collection('promos').add({code, months: +m});
+  alert('Промокод: ' + code);
+}
+
+/* ---------- 10.  UTIL ---------- */
+function isAdmin(){
+  return auth.currentUser && auth.currentUser.email === 'yanis-20001@mail.ru';
+}
+
+/* ---------- 11.  HANDLERS ---------- */
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('loginBtn').addEventListener('click',loginForm);
   document.getElementById('registerBtn').addEventListener('click',registerForm);
   document.getElementById('logoutBtn').addEventListener('click',logout);
   document.getElementById('submitAuthBtn').addEventListener('click',submitAuth);
   document.getElementById('closeAuthBtn').addEventListener('click',closeAuth);
+  document.getElementById('closePayBtn').addEventListener('click',()=>document.getElementById('payModal').style.display='none');
+  document.getElementById('profileBtn').addEventListener('click',profile);
+  document.getElementById('closePromoBtn').addEventListener('click',()=>document.getElementById('promoModal').style.display='none');
 });
 
-/* ---------- 7.  AUTH STATE LISTENER ---------- */
-auth.onAuthStateChanged(async user=>{
+/* ---------- 12.  AUTH STATE ---------- */
+auth.onAuthStateChanged(user=>{
   if(user){
     document.getElementById('loginBtn').style.display='none';
     document.getElementById('registerBtn').style.display='none';
     document.getElementById('userInfo').style.display='inline';
-
-    // Показываем админку для yanis-20001@mail.ru
-    if (user.email === 'yanis-20001@mail.ru') {
+    document.getElementById('profileBtn').style.display='inline';
+    if(user.email==='yanis-20001@mail.ru'){
       document.getElementById('adminBadge').style.display='inline';
-    } else {
+      document.getElementById('usersBtn').style.display='inline';
+      document.getElementById('checkBtn').style.display='inline';
+    }else{
       document.getElementById('adminBadge').style.display='none';
+      document.getElementById('usersBtn').style.display='none';
+      document.getElementById('checkBtn').style.display='none';
     }
   }else{
     document.getElementById('loginBtn').style.display='inline';
     document.getElementById('registerBtn').style.display='inline';
     document.getElementById('userInfo').style.display='none';
-    document.getElementById('adminBadge').style.display='none';
+    document.getElementById('profileBtn').style.display='none';
+    document.getElementById('usersBtn').style.display='none';
+    document.getElementById('checkBtn').style.display='none';
   }
 });
 
-/* ---------- 8.  START ---------- */
+/* ---------- 13.  START ---------- */
 home();
 </script>
 </body>
