@@ -54,19 +54,20 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 
-<!-- Modal -->
+<!-- Auth Modal -->
 <div id="authModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
   <div style="background:#fff;border-radius:8px;padding:20px;width:300px">
     <h3 id="authTitle">Вход</h3>
     <input id="email" placeholder="Email" type="email"><br>
     <input id="password" placeholder="Пароль" type="password"><br>
-    <input id="name" placeholder="Имя (по желанию)" style="display:none"><br>
+    <input id="firstName" placeholder="Имя (по желанию)"><br>
+    <input id="lastName" placeholder="Фамилия (по желанию)"><br>
     <button id="submitAuthBtn">Отправить</button>
     <button id="closeAuthBtn">Закрыть</button>
   </div>
 </div>
 
-<!-- Оплата -->
+<!-- Payment Modal -->
 <div id="payModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
   <div style="background:#fff;border-radius:8px;padding:20px;width:300px">
     <h3>Оплата подписки</h3>
@@ -77,7 +78,7 @@
   </div>
 </div>
 
-<!-- Промокод -->
+<!-- Promo Modal -->
 <div id="promoModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0005;align-items:center;justify-content:center;z-index:9999">
   <div style="background:#fff;border-radius:8px;padding:20px;width:300px">
     <h3>Подарочный код</h3>
@@ -85,6 +86,12 @@
     <button id="applyPromoBtn">Применить</button>
     <button id="closePromoBtn">Закрыть</button>
   </div>
+</div>
+
+<!-- Work sub-tabs -->
+<div id="workNav" style="display:none;justify-content:center;gap:8px;margin-bottom:10px">
+  <button class="work-tab-btn active" data-sub="positions">Позиции</button>
+  <button class="work-tab-btn" data-sub="earnings">Заработок</button>
 </div>
 
 <script>
@@ -99,19 +106,19 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const db = firebase.firestore();
+const db  = firebase.firestore();
 
 /* ---------- 2.  INDEXEDDB ---------- */
-const DB_NAME = 'finance', DB_VER = 2;
-function openDB() {
-  return new Promise((res, rej) => {
+const DB_NAME = 'finance', DB_VER = 3;
+function openDB(){
+  return new Promise((res,rej)=>{
     const r = indexedDB.open(DB_NAME, DB_VER);
-    r.onerror = () => rej(r.error);
-    r.onsuccess = () => res(r.result);
-    r.onupgradeneeded = () => {
+    r.onerror = ()=>rej(r.error);
+    r.onsuccess = ()=>res(r.result);
+    r.onupgradeneeded = ()=>{
       const db = r.result;
-      ['expenses','incomes','positions','worklog'].forEach(s => {
-        if (!db.objectStoreNames.contains(s))
+      ['expenses','incomes','positions','worklog'].forEach(s=>{
+        if(!db.objectStoreNames.contains(s))
           db.createObjectStore(s,{keyPath:'id',autoIncrement:true});
       });
     };
@@ -144,58 +151,76 @@ async function del(store,id){
 
 /* ---------- 3.  AUTH ---------- */
 let mode = 'login';
-function loginForm() {
-  mode = 'login';
-  document.getElementById('authTitle').textContent = 'Вход';
-  document.getElementById('name').style.display = 'none';
-  document.getElementById('authModal').style.display = 'flex';
+function loginForm(){
+  mode='login';
+  document.getElementById('authTitle').textContent='Вход';
+  toggleNameInputs(false);
+  document.getElementById('authModal').style.display='flex';
 }
-function registerForm() {
-  mode = 'register';
-  document.getElementById('authTitle').textContent = 'Регистрация';
-  document.getElementById('name').style.display = 'block';
-  document.getElementById('authModal').style.display = 'flex';
+function registerForm(){
+  mode='register';
+  document.getElementById('authTitle').textContent='Регистрация';
+  toggleNameInputs(true);
+  document.getElementById('authModal').style.display='flex';
 }
-function closeAuth() {
-  document.getElementById('authModal').style.display = 'none';
+function toggleNameInputs(show){
+  ['firstName','lastName'].forEach(id=>{
+    document.getElementById(id).style.display = show ? 'block' : 'none';
+  });
 }
-async function submitAuth() {
+function closeAuth(){ document.getElementById('authModal').style.display='none'; }
+
+async function submitAuth(){
   const email = document.getElementById('email').value.trim();
   const pwd   = document.getElementById('password').value;
-  const name  = document.getElementById('name').value.trim();
-  if (!email || !pwd) { alert('Заполните поля'); return; }
-  try {
-    if (mode === 'login') {
-      await auth.signInWithEmailAndPassword(email, pwd);
-    } else {
-      await auth.createUserWithEmailAndPassword(email, pwd);
+  const first = document.getElementById('firstName').value.trim();
+  const last  = document.getElementById('lastName').value.trim();
+  if(!email || !pwd){ alert('Заполните поля'); return; }
+
+  try{
+    if(mode==='login'){
+      await auth.signInWithEmailAndPassword(email,pwd);
+    }else{
+      await auth.createUserWithEmailAndPassword(email,pwd);
       await db.collection('users').doc(auth.currentUser.uid).set({
-        name, email, reg_date: new Date(), sub_until: null, sub_count: 0
+        firstName:first,
+        lastName:last,
+        email,
+        regDate:new Date(),
+        firstSubDate:null,
+        subUntil:null,
+        subCount:0,
+        totalSubDays:0
       });
     }
     closeAuth();
-  } catch (e) { alert(e.message); }
+  }catch(e){ alert(e.message); }
 }
-function logout() { auth.signOut(); }
+function logout(){ auth.signOut(); }
 
 /* ---------- 4.  TABS ---------- */
 const nav = document.querySelector('nav');
-const content = document.getElementById('content');
-nav.addEventListener('click', e => {
-  if (!e.target.dataset.tab) return;
-  [...nav.children].forEach(b => b.classList.remove('active'));
+nav.addEventListener('click',e=>{
+  if(!e.target.dataset.tab) return;
+  [...nav.children].forEach(b=>b.classList.remove('active'));
   e.target.classList.add('active');
-  switch (e.target.dataset.tab) {
-    case 'home':    home(); break;
-    case 'expenses':expenses(); break;
+  switch(e.target.dataset.tab){
+    case 'home': home(); break;
+    case 'expenses': expenses(); break;
     case 'incomes': incomes(); break;
-    case 'work':    work(); break;
-    case 'users':   users(); break;
-    case 'check':   checkPayments(); break;
+    case 'work': work(); break;
+    case 'users': users(); break;
+    case 'check': checkPayments(); break;
   }
 });
 
-/* ---------- 5.  TABS FUNCS ---------- */
+/* ---------- 5.  GLOBAL HELPERS ---------- */
+function isAdmin(){
+  return auth.currentUser && auth.currentUser.email==='yanis-20001@mail.ru';
+}
+function $(sel){ return document.querySelector(sel); }
+
+/* ---------- 6.  HOME ---------- */
 async function home(){
   const [inc,exp]=await Promise.all([getAll('incomes'),getAll('expenses')]);
   const incCats={},expCats={};
@@ -203,21 +228,26 @@ async function home(){
   exp.forEach(r=>expCats[r.category]=(expCats[r.category]||0)+r.amount);
   const totalInc=Object.values(incCats).reduce((a,b)=>a+b,0);
   const totalExp=Object.values(expCats).reduce((a,b)=>a+b,0);
-  content.innerHTML=`
+
+  let html = '';
+  if(isAdmin()){
+    html += `<section><button onclick="promoAdmin()">Сгенерировать промокод</button></section>`;
+  }
+  html += `
   <section><h2>Доходы / Расходы</h2><canvas id="pie"></canvas></section>
   <section><h2>Доходы по категориям</h2><ul>${Object.entries(incCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>
   <section><h2>Расходы по категориям</h2><ul>${Object.entries(expCats).sort(([,a],[,b])=>b-a).map(([c,s])=>`<li>${c}: ${s.toFixed(2)}₽</li>`).join('')}</ul></section>`;
-  new Chart(document.getElementById('pie'), {
-    type: 'pie',
-    data: {
-      labels: ['Доходы', 'Расходы'],
-      datasets: [{
-        data: [totalInc, totalExp],
-        backgroundColor: ['#28a745', '#dc3545']
-      }]
+  content.innerHTML = html;
+  new Chart($('#pie'),{
+    type:'pie',
+    data:{
+      labels:['Доходы','Расходы'],
+      datasets:[{ data:[totalInc,totalExp], backgroundColor:['#28a745','#dc3545'] }]
     }
   });
 }
+
+/* ---------- 7.  EXPENSES & INCOMES ---------- */
 async function expenses(){
   content.innerHTML=`
   <section>
@@ -231,7 +261,7 @@ async function expenses(){
     </form>
   </section>
   <section><ul id="expList"></ul></section>`;
-  const form=document.getElementById('expForm');
+  const form=$('#expForm');
   form.addEventListener('submit',async e=>{
     e.preventDefault();
     const fd=new FormData(form);
@@ -239,9 +269,8 @@ async function expenses(){
     form.reset();
     expenses();
   });
-  const list=document.getElementById('expList');
   const items=await getAll('expenses');
-  list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.target} (${r.date}) <button onclick="del('expenses',${r.id}).then(expenses)">✖</button></li>`).join('');
+  $('#expList').innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.target} (${r.date}) <button onclick="del('expenses',${r.id}).then(expenses)">✖</button></li>`).join('');
 }
 async function incomes(){
   content.innerHTML=`
@@ -256,7 +285,7 @@ async function incomes(){
     </form>
   </section>
   <section><ul id="incList"></ul></section>`;
-  const form=document.getElementById('incForm');
+  const form=$('#incForm');
   form.addEventListener('submit',async e=>{
     e.preventDefault();
     const fd=new FormData(form);
@@ -264,258 +293,326 @@ async function incomes(){
     form.reset();
     incomes();
   });
-  const list=document.getElementById('incList');
   const items=await getAll('incomes');
-  list.innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.source} (${r.date}) <button onclick="del('incomes',${r.id}).then(incomes)">✖</button></li>`).join('');
+  $('#incList').innerHTML=items.map(r=>`<li>${r.amount}₽ – ${r.source} (${r.date}) <button onclick="del('incomes',${r.id}).then(incomes)">✖</button></li>`).join('');
 }
 
-/* ---------- 6.  WORK (piece-rate wage) ---------- */
+/* ---------- 8.  WORK ---------- */
 async function work(){
+  $('#workNav').style.display='flex';
+  const hash=window.location.hash.slice(1) || 'positions';
+  switch(hash){
+    case 'positions': positionsTab(); break;
+    case 'earnings':  earningsTab();  break;
+    default: positionsTab();
+  }
+}
+function openWorkTab(tab){
+  window.location.hash=tab;
+  work();
+}
+$('#workNav').addEventListener('click',e=>{
+  if(!e.target.dataset.sub) return;
+  [...$('.work-tab-btn')].forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  openWorkTab(e.target.dataset.sub);
+});
+
+/* -------- 8A. POSITIONS TAB -------- */
+async function positionsTab(){
+  $('#workNav').querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+  $('#workNav').querySelector('[data-sub="positions"]').classList.add('active');
   content.innerHTML=`
   <section>
-    <h2>Добавить позицию / расценку</h2>
+    <h2>Добавить позицию</h2>
     <form id="posForm">
-      <input name="name" placeholder="Название работы" required>
-      <input name="rate" type="number" step="0.01" placeholder="Цена за единицу" required>
+      <input name="name" placeholder="Название" required>
+      <input name="holes" type="number" placeholder="Кол-во отверстий на 1к" required>
+      <input name="sets"  type="number" placeholder="Кол-во комплектов" required>
+      <input name="price" type="number" step="0.01" placeholder="Цена за 1к" required>
       <button>Добавить</button>
     </form>
   </section>
+  <section><ul id="posList"></ul></section>`;
+  const form=$('#posForm');
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(form);
+    await add('positions',{
+      name:fd.get('name'),
+      holes:+fd.get('holes'),
+      sets:+fd.get('sets'),
+      price:+fd.get('price')
+    });
+    form.reset();
+    positionsTab();
+  });
+  const items=await getAll('positions');
+  items.sort((a,b)=>a.name.localeCompare(b.name));
+  $('#posList').innerHTML=items.map(p=>`
+    <li>${p.name} | отверстий: ${p.holes} | комплектов: ${p.sets} | цена: ${p.price.toFixed(2)}₽
+        <button onclick="del('positions',${p.id}).then(positionsTab)">✖</button>
+    </li>`).join('');
+}
 
+/* -------- 8B. EARNINGS TAB -------- */
+async function earningsTab(){
+  $('#workNav').querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+  $('#workNav').querySelector('[data-sub="earnings"]').classList.add('active');
+  const now=new Date();
+  const year=now.getFullYear();
+  content.innerHTML=`
   <section>
-    <h2>Записать выполненную работу</h2>
-    <form id="logForm">
-      <select id="posSelect" name="positionId" required></select>
-      <input name="qty" type="number" step="0.01" placeholder="Кол-во" required>
+    <h2>Заработок ${year}</h2>
+    <canvas id="yearChart"></canvas>
+  </section>
+  <section>
+    <h2>Добавить выработку</h2>
+    <form id="prodForm">
+      <select id="prodPos" name="posId" required></select>
+      <input name="qty" type="number" step="0.01" placeholder="Кол-во комплектов" required>
       <input name="date" type="date" required>
-      <button>Записать</button>
+      <button>Добавить</button>
     </form>
   </section>
-
-  <section>
-    <h2>История работ и зарплата</h2>
-    <p id="totalWage"><b>Итого: 0 ₽</b></p>
-    <ul id="logList"></ul>
-  </section>`;
-
-  const $ = sel => content.querySelector(sel);
-
-  const refreshPositions = async () => {
-    const pos = await getAll('positions');
-    const sel = $('#posSelect');
-    sel.innerHTML = pos.map(p => `<option value="${p.id}">${p.name} (${p.rate}₽)</option>`).join('');
-    return pos;
-  };
-
-  const refreshLog = async () => {
-    const [log, pos] = await Promise.all([getAll('worklog'), getAll('positions')]);
-    const map = Object.fromEntries(pos.map(p => [p.id, p]));
-    let total = 0;
-    $('#logList').innerHTML = log.map(l => {
-      const p = map[l.positionId];
-      const sum = p ? p.rate * l.qty : 0;
-      total += sum;
-      return `<li>${p?.name || '?'} – ${l.qty} × ${p?.rate || 0}₽ = ${sum.toFixed(2)}₽ (${l.date})
-                <button onclick="del('worklog',${l.id}).then(work)">✖</button></li>`;
-    }).join('');
-    $('#totalWage').innerHTML = `<b>Итого: ${total.toFixed(2)} ₽</b>`;
-  };
-
-  $('#posForm').addEventListener('submit', async e=>{
+  <section id="prodListSec"></section>`;
+  const pos=await getAll('positions');
+  $('#prodPos').innerHTML=pos.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  const form=$('#prodForm');
+  form.addEventListener('submit',async e=>{
     e.preventDefault();
-    const fd = new FormData($('#posForm'));
-    await add('positions', { name: fd.get('name'), rate: +fd.get('rate') });
-    $('#posForm').reset();
-    await refreshPositions();
-  });
-
-  $('#logForm').addEventListener('submit', async e=>{
-    e.preventDefault();
-    const fd = new FormData($('#logForm'));
-    await add('worklog', {
-      positionId: +fd.get('positionId'),
-      qty: +fd.get('qty'),
-      date: fd.get('date')
+    const fd=new FormData(form);
+    const posObj=pos.find(p=>p.id===+fd.get('posId'));
+    await add('worklog',{
+      posId:+fd.get('posId'),
+      qty:+fd.get('qty'),
+      date:fd.get('date'),
+      earned:posObj.price*posObj.holes*+fd.get('qty')
     });
-    $('#logForm').reset();
-    await refreshLog();
+    form.reset();
+    earningsTab();
   });
-
-  await refreshPositions();
-  await refreshLog();
-}
-
-/* ---------- 7.  USERS / PROFILE ---------- */
-async function users(){
-  if (!isAdmin()) return;
-  const usersSnap = await db.collection('users').get();
-  let html = '<section><h2>Пользователи</h2><table><tr><th>Email<th>Имя<th>До подписки<th>Действие</tr>';
-  usersSnap.forEach(doc=>{
-    const d = doc.data();
-    const active = d.sub_until && new Date() < d.sub_until.toDate();
-    html += `<tr class="${active?'tag-green':'tag-red'}">
-      <td>${d.email}<td>${d.name || ''}<td>${active?'Активна':'Нет'}<td>
-      <button onclick="activateSub('${doc.id}')">Оформить</button>
-    </tr>`;
+  // monthly chart
+  const logs=await getAll('worklog');
+  const months=[...Array(12)].map((_,i)=>i);
+  const data=months.map(m=>{
+    const total=logs.filter(l=>new Date(l.date).getMonth()===m && new Date(l.date).getFullYear()===year)
+                    .reduce((s,l)=>s+l.earned,0);
+    return total;
   });
-  html += '</table></section>';
-  content.innerHTML = html;
-}
-async function checkPayments(){
-  if (!isAdmin()) return;
-  const snap = await db.collection('payments').where('status','==','pending').get();
-  let html = '<section><h2>Проверка оплат</h2><table><tr><th>Email<th>Код<th>Действие</tr>';
-  snap.forEach(doc=>{
-    const d = doc.data();
-    html += `<tr><td>${d.email}<td>${d.code}<td>
-      <button onclick="confirmPayment('${doc.id}')">Подтвердить</button>
-    </tr>`;
+  new Chart($('#yearChart'),{
+    type:'bar',
+    data:{
+      labels:['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'],
+      datasets:[{label:'₽',data,backgroundColor:'#007bff'}]
+    }
   });
-  html += '</table></section>';
-  content.innerHTML = html;
-}
-async function activateSub(uid){
-  const now = new Date();
-  const end = new Date();
-  end.setMonth(end.getMonth()+1);
-  await db.collection('users').doc(uid).update({
-    sub_until: end,
-    sub_count: firebase.firestore.FieldValue.increment(1)
-  });
-  users();
-}
-async function confirmPayment(pid){
-  await db.collection('payments').doc(pid).update({status:'confirmed'});
-  const pay = await db.collection('payments').doc(pid).get();
-  await activateSub(pay.data().uid);
-  checkPayments();
+  // daily list
+  const list=logs.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  let totalEarned=0, totalHoles=0, totalSets=0;
+  const htmlList=list.map(l=>{
+    const p=pos.find(x=>x.id===l.posId);
+    const holes=p.holes*l.qty;
+    totalEarned+=l.earned;
+    totalHoles  +=holes;
+    totalSets   +=l.qty;
+    return `<li>${p.name} | комплектов: ${l.qty} | отверстий: ${holes} | ${l.earned.toFixed(2)}₽ | ${l.date}
+              <button onclick="del('worklog',${l.id}).then(earningsTab)">✖</button></li>`;
+  }).join('');
+  $('#prodListSec').innerHTML=`
+    <h3>Сумма по выработке</h3>
+    <ul>${htmlList}</ul>
+    <p><b>Итого: ${totalEarned.toFixed(2)} ₽ | ${totalHoles} отверстий | ${totalSets} комплектов</b></p>`;
 }
 
-/* ---------- 8.  PROFILE ---------- */
+/* ---------- 9.  PROFILE ---------- */
 async function profile(){
   const user = auth.currentUser;
   if(!user) return loginForm();
   const doc = await db.collection('users').doc(user.uid).get();
   const d = doc.data();
   const now = new Date();
-  const active = d.sub_until && now < d.sub_until.toDate();
+  const active = d.subUntil && now < d.subUntil.toDate();
+
   let html = `<section>
     <h2>Личный кабинет</h2>
-    <p><b>Email:</b> ${d.email}</p>
-    <p><b>Имя:</b> ${d.name || ''}</p>
-    <p><b>Дата регистрации:</b> ${d.reg_date?.toDate().toLocaleDateString() || ''}</p>
-    <p><b>Подписка до:</b> ${d.sub_until?.toDate().toLocaleDateString() || 'Не активна'}</p>
-    <p><b>Кол-во подписок:</b> ${d.sub_count || 0}</p>
-    ${active ? '' : '<button id="buyBtn">Купить подписку (100₽)</button>'}
-    <input id="promoInput" placeholder="Подарочный код">
-    <button id="applyPromoBtn">Применить</button>
-    <br><button id="deleteProfileBtn">Удалить профиль</button>
+    <p><b>Логин:</b> ${d.email}</p>
+    <p><b>Имя:</b> ${d.firstName || ''}</p>
+    <p><b>Фамилия:</b> ${d.lastName || ''}</p>
+    <p><b>Дата регистрации:</b> ${d.regDate?.toDate().toLocaleDateString()}</p>
+    <p><b>Первый платёж:</b> ${d.firstSubDate?.toDate().toLocaleDateString() || '—'}</p>
+    <p><b>Подписка до:</b> ${d.subUntil?.toDate().toLocaleDateString() || 'Не активна'}</p>
+    <p><b>Кол-во покупок:</b> ${d.subCount}</p>
+    <p><b>Дней с подпиской:</b> ${d.totalSubDays || 0}</p>`;
+
+  if(!active && !isAdmin()){
+    html += `<button id="buyBtn">Купить подписку (100 ₽)</button>`;
+  }
+  html += `<br><input id="promoInput" placeholder="Подарочный код">
+           <button id="applyPromoBtn">Применить</button>
+           <br><br><button id="deleteProfileBtn">Удалить профиль</button>
   </section>`;
   content.innerHTML = html;
-  if(!active) $('#buyBtn').onclick = buySub;
+
+  if(!active && !isAdmin()) $('#buyBtn').onclick = buySub;
   $('#applyPromoBtn').onclick = applyPromo;
   $('#deleteProfileBtn').onclick = deleteProfile;
-  function $(sel){return content.querySelector(sel);}
 }
 
-/* ---------- 9.  SUBSCRIPTION ---------- */
+/* ---------- 10.  SUBSCRIPTION FLOW ---------- */
 function buySub(){
   const user = auth.currentUser;
   const code = Math.floor(Math.random()*999999999)+1;
-  document.getElementById('payCode').textContent = code;
-  document.getElementById('payModal').style.display='flex';
-  document.getElementById('paidBtn').onclick = async () => {
+  $('#payCode').textContent = code;
+  $('#payModal').style.display='flex';
+  $('#paidBtn').onclick = async () => {
     await db.collection('payments').add({
-      uid: user.uid,
-      email: user.email,
+      uid:user.uid,
+      email:user.email,
       code,
-      status: 'pending',
-      date: new Date()
+      status:'pending',
+      date:new Date()
     });
-    document.getElementById('payModal').style.display='none';
+    $('#payModal').style.display='none';
     alert('Запрос отправлен администратору.');
   };
 }
 async function applyPromo(){
   const user = auth.currentUser;
-  const code = document.getElementById('promoInput').value.trim();
+  const code = $('#promoInput').value.trim();
   if(!code) return alert('Введите код');
   const snap = await db.collection('promos').where('code','==',code).get();
   if(snap.empty) return alert('Код не найден');
   const promo = snap.docs[0].data();
-  const now = new Date();
-  const end = new Date();
-  end.setMonth(end.getMonth()+promo.months);
-  await db.collection('users').doc(user.uid).update({
-    sub_until: end,
-    sub_count: firebase.firestore.FieldValue.increment(promo.months)
-  });
+  await activateSubDays(user.uid, promo.months * 30);
   await db.collection('promos').doc(snap.docs[0].id).delete();
-  alert('Промокод активирован!');
+  alert(`Промокод активирован на ${promo.months} мес.`);
   profile();
 }
+async function activateSubDays(uid,days){
+  const now=new Date();
+  const doc=await db.collection('users').doc(uid).get();
+  const d=doc.data();
+  const current=d.subUntil && now<d.subUntil.toDate() ? d.subUntil.toDate() : now;
+  const end=new Date(current);
+  end.setDate(end.getDate()+days);
+  await db.collection('users').doc(uid).update({
+    firstSubDate: d.firstSubDate || now,
+    subUntil: end,
+    subCount: firebase.firestore.FieldValue.increment(1),
+    totalSubDays: firebase.firestore.FieldValue.increment(days)
+  });
+}
+
+/* ---------- 11.  ADMIN USERS LIST ---------- */
+async function users(){
+  if(!isAdmin()) return;
+  const snap = await db.collection('users').get();
+  let html='<section><h2>Пользователи</h2><table><tr><th>Email<th>Имя<th>Фамилия<th>До<th>Действие</tr>';
+  snap.forEach(doc=>{
+    const d=doc.data();
+    const active=d.subUntil && new Date()<d.subUntil.toDate();
+    html+=`<tr class="${active?'tag-green':'tag-red'}">
+      <td>${d.email}<td>${d.firstName||''}<td>${d.lastName||''}<td>${active?'Активна':d.subUntil?.toDate().toLocaleDateString()||'—'}
+      <td><button onclick="activateSubDays('${doc.id}',30)">Оформить 30 дн.</button></td>
+    </tr>`;
+  });
+  html+='</table></section>';
+  content.innerHTML=html;
+}
+
+/* ---------- 12.  ADMIN CHECK PAYMENTS ---------- */
+async function checkPayments(){
+  if(!isAdmin()) return;
+  const snap = await db.collection('payments').where('status','==','pending').get();
+  let html='<section><h2>Проверка оплат</h2><table><tr><th>Email<th>Код<th>Дата<th></tr>';
+  snap.forEach(doc=>{
+    const d=doc.data();
+    html+=`<tr>
+      <td>${d.email}<td>${d.code}<td>${d.date.toDate().toLocaleString()}
+      <td><button onclick="confirmPayment('${doc.id}')">Оформить</button></td>
+    </tr>`;
+  });
+  html+='</table></section>';
+  content.innerHTML=html;
+}
+async function confirmPayment(pid){
+  const pay=await db.collection('payments').doc(pid).get();
+  await activateSubDays(pay.data().uid,30);
+  await db.collection('payments').doc(pid).update({status:'confirmed'});
+  checkPayments();
+}
+
+/* ---------- 13.  ADMIN PROMO GENERATOR ---------- */
+async function promoAdmin(){
+  if(!isAdmin()) return;
+  const m = prompt('Кол-во месяцев подписки:');
+  if(!m || isNaN(m)) return;
+  const code=[...Array(34)].map(()=>'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.charAt(Math.floor(Math.random()*36))).join('');
+  await db.collection('promos').add({code,months:+m});
+  alert(`Промокод: ${code}`);
+}
+
+/* ---------- 14.  DELETE PROFILE ---------- */
 async function deleteProfile(){
   if(!confirm('Удалить профиль навсегда?')) return;
-  const user = auth.currentUser;
+  const user=auth.currentUser;
   await db.collection('users').doc(user.uid).delete();
   await user.delete();
   logout();
 }
 
-/* ---------- 10.  PROMO ADMIN ---------- */
-async function promoAdmin(){
-  if(!isAdmin()) return;
-  const m = prompt('Кол-во месяцев:');
-  if(!m || isNaN(m)) return;
-  const code = [...Array(34)].map(()=> 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.charAt(Math.floor(Math.random()*36))).join('');
-  await db.collection('promos').add({code, months: +m});
-  alert('Промокод: ' + code);
-}
-
-/* ---------- 11.  UTIL ---------- */
-function isAdmin(){
-  return auth.currentUser && auth.currentUser.email === 'yanis-20001@mail.ru';
-}
-
-/* ---------- 12.  HANDLERS ---------- */
+/* ---------- 15.  EVENT LISTENERS ---------- */
 document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('loginBtn').addEventListener('click',loginForm);
-  document.getElementById('registerBtn').addEventListener('click',registerForm);
-  document.getElementById('logoutBtn').addEventListener('click',logout);
-  document.getElementById('submitAuthBtn').addEventListener('click',submitAuth);
-  document.getElementById('closeAuthBtn').addEventListener('click',closeAuth);
-  document.getElementById('closePayBtn').addEventListener('click',()=>document.getElementById('payModal').style.display='none');
-  document.getElementById('profileBtn').addEventListener('click',profile);
-  document.getElementById('closePromoBtn').addEventListener('click',()=>document.getElementById('promoModal').style.display='none');
+  $('#loginBtn').addEventListener('click',loginForm);
+  $('#registerBtn').addEventListener('click',registerForm);
+  $('#logoutBtn').addEventListener('click',logout);
+  $('#submitAuthBtn').addEventListener('click',submitAuth);
+  $('#closeAuthBtn').addEventListener('click',closeAuth);
+  $('#closePayBtn').addEventListener('click',()=>$('#payModal').style.display='none');
+  $('#profileBtn').addEventListener('click',profile);
+  $('#closePromoBtn').addEventListener('click',()=>$('#promoModal').style.display='none');
 });
 
-/* ---------- 13.  AUTH STATE ---------- */
-auth.onAuthStateChanged(user=>{
+/* ---------- 16.  AUTH STATE ---------- */
+auth.onAuthStateChanged(async user=>{
   if(user){
-    document.getElementById('loginBtn').style.display='none';
-    document.getElementById('registerBtn').style.display='none';
-    document.getElementById('userInfo').style.display='inline';
-    document.getElementById('profileBtn').style.display='inline';
-    if(user.email==='yanis-20001@mail.ru'){
-      document.getElementById('adminBadge').style.display='inline';
-      document.getElementById('usersBtn').style.display='inline';
-      document.getElementById('checkBtn').style.display='inline';
+    $('#loginBtn').style.display='none';
+    $('#registerBtn').style.display='none';
+    $('#userInfo').style.display='inline';
+    $('#profileBtn').style.display='inline';
+    if(isAdmin()){
+      $('#adminBadge').style.display='inline';
+      $('#usersBtn').style.display='inline';
+      $('#checkBtn').style.display='inline';
     }else{
-      document.getElementById('adminBadge').style.display='none';
-      document.getElementById('usersBtn').style.display='none';
-      document.getElementById('checkBtn').style.display='none';
+      $('#adminBadge').style.display='none';
+      $('#usersBtn').style.display='none';
+      $('#checkBtn').style.display='none';
+    }
+    // check subscription
+    const doc=await db.collection('users').doc(user.uid).get();
+    const d=doc.data();
+    const active=d.subUntil && new Date()<d.subUntil.toDate();
+    if(!active && !isAdmin()){
+      profile();   // force profile to buy
+    }else{
+      home();
     }
   }else{
-    document.getElementById('loginBtn').style.display='inline';
-    document.getElementById('registerBtn').style.display='inline';
-    document.getElementById('userInfo').style.display='none';
-    document.getElementById('profileBtn').style.display='none';
-    document.getElementById('usersBtn').style.display='none';
-    document.getElementById('checkBtn').style.display='none';
+    $('#loginBtn').style.display='inline';
+    $('#registerBtn').style.display='inline';
+    $('#userInfo').style.display='none';
+    $('#profileBtn').style.display='none';
+    $('#usersBtn').style.display='none';
+    $('#checkBtn').style.display='none';
+    home();
   }
 });
 
-/* ---------- 14.  START ---------- */
-home();
+/* ---------- 17.  FIRESTORE RULES (copy to Firebase Console) ----------
+
+------------------------------------------------------------------------*/
 </script>
 </body>
 </html>
